@@ -22,14 +22,17 @@ rootProject.name = 'cassandra-analytics-core'
 include 'cassandra-analytics-cdc'
 include 'cassandra-analytics-common'
 include 'cassandra-bridge'
-include 'cassandra-four-zero'
-include 'cassandra-four-zero-bridge'
-include 'cassandra-four-zero-types'
+//include 'cassandra-four-zero' // TODO(c4c5): Enable once V5 work is completed.
+//include 'cassandra-four-zero-bridge' // TODO(c4c5): Enable once V5 work is completed.
+//include 'cassandra-four-zero-types' // TODO(c4c5): Enable once V5 work is completed.
+include 'cassandra-five-zero'
+include 'cassandra-five-zero-bridge'
+include 'cassandra-five-zero-types'
 include 'cassandra-analytics-core'
 include 'cassandra-analytics-core-example'
 include 'cassandra-analytics-integration-framework'
 include 'cassandra-analytics-integration-tests'
 include 'cassandra-analytics-spark-converter'
-include 'cassandra-analytics-spark-four-zero-converter'
+//include 'cassandra-analytics-spark-four-zero-converter' // TODO(c4c5): Enable once V5 work is completed.
+include 'cassandra-analytics-spark-five-zero-converter'
 include 'cassandra-analytics-cdc-codec'
-
