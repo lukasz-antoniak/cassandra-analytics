@@ -44,6 +44,16 @@ configurations {
     fourzeroAvroConverter {
         description = 'Avro converter for Cassandra 4.0 Data Types'
     }
+
+    fivezero {
+        description = 'Cassandra 5.0 dependency'
+    }
+    fivezerobridge {
+        description = 'Bridge to Cassandra 5.0'
+    }
+    fivezerotypes {
+        description = 'Cassandra 5.0 Data Types'
+    }
 }
 
 dependencies {
@@ -51,10 +61,14 @@ dependencies {
 
     implementation project(":cassandra-analytics-common")
     implementation project(":cassandra-avro-converter")
-    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow'))
-    fourzeroBridge(project(":cassandra-four-zero-bridge"))
-    fourzeroTypes(project(":cassandra-four-zero-types"))
-    fourzeroAvroConverter(project(":cassandra-four-zero-avro-converter"))
+//    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow')) // TODO(c4c5): Enable once V5 work is completed.
+//    fourzerobridge(project(path: ':cassandra-four-zero-bridge')) // TODO(c4c5): Enable once V5 work is completed.
+//    fourzerotypes(project(path: ':cassandra-four-zero-types')) // TODO(c4c5): Enable once V5 work is completed.
+//    fourzeroAvroConverter(project(":cassandra-four-zero-avro-converter")) // TODO(c4c5): Enable once V5 work is completed.
+
+    fivezero(project(path: ':cassandra-five-zero', configuration: 'shadow'))
+    fivezerobridge(project(path: ':cassandra-five-zero-bridge'))
+    fivezerotypes(project(path: ':cassandra-five-zero-types'))
 
     implementation "com.google.guava:guava:${guavaVersion}"
 
@@ -70,9 +84,12 @@ dependencies {
     // pull in cassandra-bridge so we can re-use TestSchema to generate arbitrary schemas for the cdc tests
     testImplementation project(":cassandra-bridge")
     testImplementation(testFixtures(project(':cassandra-bridge')))
-    testImplementation project(":cassandra-four-zero-bridge")
-    testImplementation project(":cassandra-four-zero-types")
-    testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow')
+//    testImplementation project(":cassandra-four-zero-bridge") // TODO(c4c5): Enable once V5 work is completed.
+//    testImplementation project(":cassandra-four-zero-types") // TODO(c4c5): Enable once V5 work is completed.
+//    testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow') // TODO(c4c5): Enable once V5 work is completed.
+    testImplementation project(":cassandra-five-zero-bridge")
+    testImplementation project(":cassandra-five-zero-types")
+    testImplementation project(path: ':cassandra-five-zero', configuration: 'shadow')
     testImplementation(group: 'org.quicktheories', name: 'quicktheories', version: "${project.rootProject.quickTheoriesVersion}")
     testImplementation(group: 'com.google.guava', name: 'guava', version: '31.1-jre')
     testImplementation(group: 'com.github.luben', name: 'zstd-jni', version: '1.5.0-4')
@@ -84,17 +101,24 @@ dependencies {
 }
 
 jar {
-    dependsOn(configurations.fourzero)
-    dependsOn(configurations.fourzeroBridge)
-    dependsOn(configurations.fourzeroTypes)
-    dependsOn(configurations.fourzeroAvroConverter)
+//    dependsOn(configurations.fourzero) // TODO(c4c5): Enable once V5 work is completed.
+//    dependsOn(configurations.fourzerobridge) // TODO(c4c5): Enable once V5 work is completed.
+//    dependsOn(configurations.fourzerotypes) // TODO(c4c5): Enable once V5 work is completed.
+//    dependsOn(configurations.fourzeroAvroConverter) // TODO(c4c5): Enable once V5 work is completed.
+
+    dependsOn(configurations.fivezero)
+    dependsOn(configurations.fivezerobridge)
+    dependsOn(configurations.fivezerotypes)
 
     exclude('META-INF/*')
     into('bridges') {
-        from(configurations.fourzero.singleFile)
-        from(configurations.fourzeroBridge.singleFile)
-        from(configurations.fourzeroTypes.singleFile)
-        from(configurations.fourzeroAvroConverter.singleFile)
+//        from(configurations.fourzero.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+//        from(configurations.fourzerobridge.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+//        from(configurations.fourzerotypes.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+//        from(configurations.fourzeroAvroConverter.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+        from(configurations.fivezero.singleFile)
+        from(configurations.fivezerobridge.singleFile)
+        from(configurations.fivezerotypes.singleFile)
     }
 }
 
