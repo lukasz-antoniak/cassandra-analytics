@@ -53,8 +53,9 @@ public interface CommitLog extends Closeable, CassandraFile, Comparable<CommitLo
         {
             try
             {
-                int version = matcher.group(2) == null ? 6 : Integer.parseInt(matcher.group(2));
-                if (version != 6 && version != 7)
+                final int version = matcher.group(2) == null ? 6 : Integer.parseInt(matcher.group(2));
+                // versions are present in C* code-base in CommitLogDescriptor
+                if (version != 6 && version != 7 && version != 8)
                 {
                     throw new IllegalStateException("Unknown commitlog version " + version);
                 }

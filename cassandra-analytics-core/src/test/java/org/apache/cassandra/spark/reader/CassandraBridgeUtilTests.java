@@ -164,7 +164,10 @@ public class CassandraBridgeUtilTests
                 }
 
                 // delete Summary.db file and check we can read the Index.db file too
-                Files.deleteIfExists(summaryDbFile);
+                if (summaryDbFile != null)
+                {
+                    Files.deleteIfExists(summaryDbFile);
+                }
             }
         });
     }

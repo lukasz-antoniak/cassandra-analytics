@@ -260,7 +260,10 @@ public abstract class SharedClusterIntegrationTestBase
      */
     protected ClusterBuilderConfiguration testClusterConfiguration()
     {
-        return new ClusterBuilderConfiguration();
+        ClusterBuilderConfiguration conf = new ClusterBuilderConfiguration();
+        // TODO: Shall we read requested compatibility from sidecar?
+        conf.additionalInstanceConfig(Map.of("storage_compatibility_mode", "NONE"));
+        return conf;
     }
 
     /**
