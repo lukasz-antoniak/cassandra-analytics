@@ -66,9 +66,9 @@ dependencies {
     api(project(':cassandra-bridge'))
 
     implementation project(":cassandra-analytics-common")
-//    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow')) // TODO(c4c5): Enable once V5 work is completed.
-//    fourzerobridge(project(path: ':cassandra-four-zero-bridge')) // TODO(c4c5): Enable once V5 work is completed.
-//    fourzerotypes(project(path: ':cassandra-four-zero-types')) // TODO(c4c5): Enable once V5 work is completed.
+    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow'))
+    fourzerobridge(project(path: ':cassandra-four-zero-bridge'))
+    fourzerotypes(project(path: ':cassandra-four-zero-types'))
 
     fivezero(project(path: ':cassandra-five-zero', configuration: 'shadow'))
     fivezerobridge(project(path: ':cassandra-five-zero-bridge'))
@@ -89,9 +89,11 @@ dependencies {
     // pull in cassandra-bridge so we can re-use TestSchema to generate arbitrary schemas for the cdc tests
     testImplementation project(":cassandra-bridge")
     testImplementation(testFixtures(project(':cassandra-bridge')))
-//    testImplementation project(":cassandra-four-zero-bridge") // TODO(c4c5): Enable once V5 work is completed.
-//    testImplementation project(":cassandra-four-zero-types") // TODO(c4c5): Enable once V5 work is completed.
-//    testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow') // TODO(c4c5): Enable once V5 work is completed.
+    // unit tests are performed only with Cassandra 5, so skip declaring dependencies to prevent
+    // indeterministic class loading
+    // testImplementation project(":cassandra-four-zero-bridge")
+    // testImplementation project(":cassandra-four-zero-types")
+    // testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow')
     testImplementation project(":cassandra-five-zero-bridge")
     testImplementation project(":cassandra-five-zero-types")
     testImplementation project(path: ':cassandra-five-zero', configuration: 'shadow')
@@ -106,9 +108,9 @@ dependencies {
 }
 
 jar {
-//    dependsOn(configurations.fourzero) // TODO(c4c5): Enable once V5 work is completed.
-//    dependsOn(configurations.fourzerobridge) // TODO(c4c5): Enable once V5 work is completed.
-//    dependsOn(configurations.fourzerotypes) // TODO(c4c5): Enable once V5 work is completed.
+    dependsOn(configurations.fourzero)
+    dependsOn(configurations.fourzerobridge)
+    dependsOn(configurations.fourzerotypes)
 
     dependsOn(configurations.fivezero)
     dependsOn(configurations.fivezerobridge)
@@ -116,9 +118,9 @@ jar {
 
     exclude('META-INF/*')
     into('bridges') {
-//        from(configurations.fourzero.singleFile) // TODO(c4c5): Enable once V5 work is completed.
-//        from(configurations.fourzerobridge.singleFile) // TODO(c4c5): Enable once V5 work is completed.
-//        from(configurations.fourzerotypes.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+        from(configurations.fourzero.singleFile)
+        from(configurations.fourzerobridge.singleFile)
+        from(configurations.fourzerotypes.singleFile)
         from(configurations.fivezero.singleFile)
         from(configurations.fivezerobridge.singleFile)
         from(configurations.fivezerotypes.singleFile)
