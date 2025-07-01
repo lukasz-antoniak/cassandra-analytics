@@ -70,10 +70,10 @@ dependencies {
 
     implementation project(":cassandra-analytics-common")
     implementation project(":cassandra-analytics-sidecar-client")
-//    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow')) // TODO(c4c5): Enable once V5 work is completed.
-//    fourzerobridge(project(path: ':cassandra-four-zero-bridge')) // TODO(c4c5): Enable once V5 work is completed.
-//    fourzerotypes(project(path: ':cassandra-four-zero-types')) // TODO(c4c5): Enable once V5 work is completed.
-//    fourzerosparksql(project(path: ':cassandra-analytics-spark-four-zero-converter')) // TODO(c4c5): Enable once V5 work is completed.
+    fourzero(project(path: ':cassandra-four-zero', configuration: 'shadow'))
+    fourzerobridge(project(path: ':cassandra-four-zero-bridge'))
+    fourzerotypes(project(path: ':cassandra-four-zero-types'))
+    fourzerosparksql(project(path: ':cassandra-analytics-spark-four-zero-converter'))
     fivezero(project(path: ':cassandra-five-zero', configuration: 'shadow'))
     fivezerobridge(project(path: ':cassandra-five-zero-bridge'))
     fivezerotypes(project(path: ':cassandra-five-zero-types'))
@@ -139,10 +139,10 @@ jar {
 
     exclude('META-INF/*')
     into('bridges') {
-//        from(configurations.fourzero.singleFile) // TODO(c4c5): Enable once V5 work is completed.
-//        from(configurations.fourzerobridge.singleFile) // TODO(c4c5): Enable once V5 work is completed.
-//        from(configurations.fourzerotypes.singleFile) // TODO(c4c5): Enable once V5 work is completed.
-//        from(configurations.fourzerosparksql.singleFile) // TODO(c4c5): Enable once V5 work is completed.
+        from(configurations.fourzero.singleFile)
+        from(configurations.fourzerobridge.singleFile)
+        from(configurations.fourzerotypes.singleFile)
+        from(configurations.fourzerosparksql.singleFile)
 
         from(configurations.fivezero.singleFile)
         from(configurations.fivezerobridge.singleFile)
