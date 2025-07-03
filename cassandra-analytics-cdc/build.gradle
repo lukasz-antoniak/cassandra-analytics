@@ -35,10 +35,10 @@ configurations {
     fourzero {
         description = 'Cassandra 4.0 dependency'
     }
-    fourzeroBridge {
+    fourzerobridge {
         description = 'Bridge to Cassandra 4.0'
     }
-    fourzeroTypes {
+    fourzerotypes {
         description = 'Cassandra 4.0 Data Types'
     }
     fourzeroAvroConverter {
@@ -53,6 +53,9 @@ configurations {
     }
     fivezerotypes {
         description = 'Cassandra 5.0 Data Types'
+    }
+    fivezeroAvroConverter {
+        description = 'Avro converter for Cassandra 5.0 Data Types'
     }
 }
 
@@ -69,6 +72,7 @@ dependencies {
     fivezero(project(path: ':cassandra-five-zero', configuration: 'shadow'))
     fivezerobridge(project(path: ':cassandra-five-zero-bridge'))
     fivezerotypes(project(path: ':cassandra-five-zero-types'))
+    fivezeroAvroConverter(project(":cassandra-five-zero-avro-converter"))
 
     implementation "com.google.guava:guava:${guavaVersion}"
 
@@ -112,6 +116,7 @@ jar {
     dependsOn(configurations.fivezero)
     dependsOn(configurations.fivezerobridge)
     dependsOn(configurations.fivezerotypes)
+    dependsOn(configurations.fivezeroAvroConverter)
 
     exclude('META-INF/*')
     into('bridges') {
@@ -122,6 +127,7 @@ jar {
         from(configurations.fivezero.singleFile)
         from(configurations.fivezerobridge.singleFile)
         from(configurations.fivezerotypes.singleFile)
+        from(configurations.fivezeroAvroConverter.singleFile)
     }
 }
 
