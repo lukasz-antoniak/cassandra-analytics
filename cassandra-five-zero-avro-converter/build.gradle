@@ -24,9 +24,11 @@ plugins {
 configurations {
     all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
     all*.exclude(group: 'log4j', module: 'log4j')
+    implCassV4
 }
 
 dependencies {
+    implCassV4 project(':cassandra-four-zero-avro-converter')
     compileOnly project(':cassandra-bridge')
     compileOnly project(":cassandra-analytics-cdc")
     compileOnly project(":cassandra-analytics-common")
@@ -38,4 +40,7 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-avro.jar"
+    dependsOn ':cassandra-four-zero-avro-converter:build'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }
