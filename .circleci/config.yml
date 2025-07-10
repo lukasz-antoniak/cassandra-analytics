@@ -111,7 +111,7 @@ commands:
             # collect up exit statuses for all of the test classes and exit with that result at the end.
             # If no gradle processes exit with non-zero status, it will still be 0
             EXIT_STATUS=0
-            FLAKY_PACKAGES=("org.apache.cassandra.analytics.shrink" "org.apache.cassandra.analytics.replacement" "org.apache.cassandra.analytics.expansion")
+            FLAKY_PACKAGES=("org.apache.cassandra.analytics.shrink" "org.apache.cassandra.analytics.replacement" "org.apache.cassandra.analytics.expansion", "org.apache.cassandra.analytics.movement")
             for TEST_NAME in $CLASSNAMES;
             do
                 FLAKY="false"
