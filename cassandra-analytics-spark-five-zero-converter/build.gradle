@@ -24,9 +24,11 @@ plugins {
 configurations {
     all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
     all*.exclude(group: 'log4j', module: 'log4j')
+    implCassV4
 }
 
 dependencies {
+    implCassV4 project(':cassandra-analytics-spark-four-zero-converter')
     compileOnly project(":cassandra-analytics-common")
     compileOnly project(":cassandra-five-zero-types")
     compileOnly project(":cassandra-analytics-spark-converter")
@@ -37,4 +39,7 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-sparksql.jar"
+    dependsOn ':cassandra-analytics-spark-four-zero-converter:build'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }
