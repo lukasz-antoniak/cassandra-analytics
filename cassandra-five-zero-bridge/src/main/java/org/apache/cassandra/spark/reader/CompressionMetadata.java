@@ -39,6 +39,7 @@ import org.apache.cassandra.spark.reader.common.BigLongArray;
 // CHECKSTYLE IGNORE: FinalClass
 public class CompressionMetadata extends AbstractCompressionMetadata
 {
+
     private final CompressionParams parameters;
     private final double crcCheckChance;
 

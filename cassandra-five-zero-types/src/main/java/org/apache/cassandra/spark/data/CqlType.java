@@ -199,6 +199,6 @@ public abstract class CqlType implements CqlField.CqlType
                                     long deletionTime)
     {
         Preconditions.checkArgument(cd.isComplex(), "The method only works with complex columns");
-        rowBuilder.addComplexDeletion(cd, DeletionTime.build(deletionTime, deletionTime));
+        rowBuilder.addComplexDeletion(cd, DeletionTime.build(deletionTime, (int) TimeUnit.MICROSECONDS.toSeconds(deletionTime)));
     }
 }

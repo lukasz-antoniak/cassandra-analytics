@@ -345,7 +345,6 @@ class ImportCompletionCoordinatorTest
         double maxSliceSize = 200;
         long jobTimeoutSeconds = 0;
 
-
         long estimatedTimeout = estimateTimeoutNanos(timeToAllSatisfiedNanos, elapsedNanos,
                                                      importCoordinatorTimeoutMultiplier,
                                                      minSliceSize, maxSliceSize,

@@ -96,8 +96,8 @@ class SSTableWriterImplementationTest
         }
 
         assertEquals(2, produced.size());
-        Set<SSTableDescriptor> expected = new HashSet<>(Arrays.asList(new SSTableDescriptor("da-2-bti"),
-                                                                      new SSTableDescriptor("da-3-bti")));
+        Set<SSTableDescriptor> expected = new HashSet<>(Arrays.asList(new SSTableDescriptor("oa-2-big"),
+                                                                      new SSTableDescriptor("oa-3-big")));
         assertEquals(expected, produced);
         produced.clear();
 
@@ -106,13 +106,13 @@ class SSTableWriterImplementationTest
             writer.addRow(ImmutableMap.of("a", i, "b", "val_" + i));
         }
         assertEquals(1, produced.size());
-        assertEquals(Collections.singleton(new SSTableDescriptor("da-4-bti")), produced);
+        assertEquals(Collections.singleton(new SSTableDescriptor("oa-4-big")), produced);
 
         // when closing the writer, a new sstable is produced (by flushing the remaining data in the buffer)
         produced.clear();
         writer.close();
         assertEquals(1, produced.size());
-        assertEquals(Collections.singleton(new SSTableDescriptor("da-5-bti")), produced);
+        assertEquals(Collections.singleton(new SSTableDescriptor("oa-5-big")), produced);
     }
 
     @Test

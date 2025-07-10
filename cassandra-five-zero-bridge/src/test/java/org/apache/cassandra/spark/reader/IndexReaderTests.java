@@ -81,22 +81,22 @@ public class IndexReaderTests
     @Test
     public void testPartialCompressedSizeWithinChunk()
     {
-        assertEquals(64, BigIndexReader.partialCompressedSizeWithinChunk(0, 1024, 64, true));
-        assertEquals(32, BigIndexReader.partialCompressedSizeWithinChunk(512, 1024, 64, true));
-        assertEquals(16, BigIndexReader.partialCompressedSizeWithinChunk(768, 1024, 64, true));
-        assertEquals(2, BigIndexReader.partialCompressedSizeWithinChunk(992, 1024, 64, true));
-        assertEquals(2, BigIndexReader.partialCompressedSizeWithinChunk(995, 1024, 64, true));
-        assertEquals(1, BigIndexReader.partialCompressedSizeWithinChunk(1008, 1024, 64, true));
-        assertEquals(0, BigIndexReader.partialCompressedSizeWithinChunk(1023, 1024, 64, true));
-        assertEquals(64, BigIndexReader.partialCompressedSizeWithinChunk(1024, 1024, 64, true));
-        assertEquals(64, BigIndexReader.partialCompressedSizeWithinChunk(2048, 1024, 64, true));
-        assertEquals(32, BigIndexReader.partialCompressedSizeWithinChunk(2560, 1024, 64, true));
+        assertEquals(64, IndexReader.partialCompressedSizeWithinChunk(0, 1024, 64, true));
+        assertEquals(32, IndexReader.partialCompressedSizeWithinChunk(512, 1024, 64, true));
+        assertEquals(16, IndexReader.partialCompressedSizeWithinChunk(768, 1024, 64, true));
+        assertEquals(2, IndexReader.partialCompressedSizeWithinChunk(992, 1024, 64, true));
+        assertEquals(2, IndexReader.partialCompressedSizeWithinChunk(995, 1024, 64, true));
+        assertEquals(1, IndexReader.partialCompressedSizeWithinChunk(1008, 1024, 64, true));
+        assertEquals(0, IndexReader.partialCompressedSizeWithinChunk(1023, 1024, 64, true));
+        assertEquals(64, IndexReader.partialCompressedSizeWithinChunk(1024, 1024, 64, true));
+        assertEquals(64, IndexReader.partialCompressedSizeWithinChunk(2048, 1024, 64, true));
+        assertEquals(32, IndexReader.partialCompressedSizeWithinChunk(2560, 1024, 64, true));
 
-        assertEquals(0, BigIndexReader.partialCompressedSizeWithinChunk(0, 1024, 64, false));
-        assertEquals(1, BigIndexReader.partialCompressedSizeWithinChunk(16, 1024, 64, false));
-        assertEquals(32, BigIndexReader.partialCompressedSizeWithinChunk(512, 1024, 64, false));
-        assertEquals(64, BigIndexReader.partialCompressedSizeWithinChunk(1023, 1024, 64, false));
-        assertEquals(32, BigIndexReader.partialCompressedSizeWithinChunk(2560, 1024, 64, false));
+        assertEquals(0, IndexReader.partialCompressedSizeWithinChunk(0, 1024, 64, false));
+        assertEquals(1, IndexReader.partialCompressedSizeWithinChunk(16, 1024, 64, false));
+        assertEquals(32, IndexReader.partialCompressedSizeWithinChunk(512, 1024, 64, false));
+        assertEquals(64, IndexReader.partialCompressedSizeWithinChunk(1023, 1024, 64, false));
+        assertEquals(32, IndexReader.partialCompressedSizeWithinChunk(2560, 1024, 64, false));
     }
 
     @Test
@@ -118,13 +118,13 @@ public class IndexReaderTests
 
     private static long calculateCompressedSize(long start, long end, int startIdx, int startCompressedChunkSize)
     {
-        return BigIndexReader.calculateCompressedSize(mockMetaData(start, startIdx, startCompressedChunkSize, end), 160000000, start, end);
+        return IndexReader.calculateCompressedSize(mockMetaData(start, startIdx, startCompressedChunkSize, end), 160000000, start, end);
     }
 
     private static long calculateCompressedSize(long start, int startIdx, int startCompressedChunkSize,
                                                 long end, int endIdx, int endCompressedChunkSize)
     {
-        return BigIndexReader.calculateCompressedSize(
+        return IndexReader.calculateCompressedSize(
         mockMetaData(start, startIdx, startCompressedChunkSize, end, endIdx, endCompressedChunkSize), 160000000, start, end
         );
     }
@@ -257,16 +257,7 @@ public class IndexReaderTests
 
                     ssTables
                     .forEach(ssTable -> CompletableFuture.runAsync(
-                             () -> {
-                                 if (ssTable.isBigFormat())
-                                 {
-                                     new BigIndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer);
-                                 }
-                                 else
-                                 {
-                                     new BtiIndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer);
-                                 }
-                             }, EXECUTOR)
+                             () -> new IndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer), EXECUTOR)
                     );
 
                     try

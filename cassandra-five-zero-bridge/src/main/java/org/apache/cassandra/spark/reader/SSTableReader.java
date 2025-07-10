@@ -23,7 +23,6 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOError;
 import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -60,31 +59,22 @@ import org.apache.cassandra.db.rows.EncodingStats;
 import org.apache.cassandra.db.rows.Row;
 import org.apache.cassandra.db.rows.Unfiltered;
 import org.apache.cassandra.db.rows.UnfilteredRowIterator;
-import org.apache.cassandra.dht.Murmur3Partitioner;
-import org.apache.cassandra.dht.RandomPartitioner;
-import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.SSTableSimpleIterator;
 import org.apache.cassandra.io.sstable.format.Version;
-import org.apache.cassandra.io.sstable.format.bti.PartitionIndex;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummary;
 import org.apache.cassandra.io.sstable.metadata.MetadataComponent;
 import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
-import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataInputStreamPlusImpl;
-import org.apache.cassandra.io.util.File;
-import org.apache.cassandra.io.util.FileHandle;
-import org.apache.cassandra.io.util.ReadOnlyInputStreamFileChannel;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.DroppedColumn;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.service.ActiveRepairService;
-import org.apache.cassandra.spark.data.FileType;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.analytics.reader.common.RawInputStream;
 import org.apache.cassandra.spark.reader.common.SSTableStreamException;
@@ -95,7 +85,6 @@ import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.spark.utils.ByteBufferUtils;
 import org.apache.cassandra.spark.utils.Pair;
 import org.apache.cassandra.spark.utils.ThrowableUtils;
-import org.apache.cassandra.spark.utils.streaming.BufferingInputStream;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -263,21 +252,10 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         Pair<DecoratedKey, DecoratedKey> keys = null;
         try
         {
-            if (ssTable.isBigFormat())
-            {
-                now = System.nanoTime();
-                summary = SSTableCache.INSTANCE.keysFromSummary(metadata, ssTable);
-                if (summary != null)
-                {
-                    stats.readSummaryDb(ssTable, System.nanoTime() - now);
-                    keys = Pair.of(summary.first(), summary.last());
-                }
-                if (keys == null)
-                {
-                    LOGGER.warn("Could not load first and last key from Summary.db file, so attempting Index.db fileName={}",
-                                ssTable.getDataFileName());
-                }
-            }
+            now = System.nanoTime();
+            summary = SSTableCache.INSTANCE.keysFromSummary(metadata, ssTable);
+            stats.readSummaryDb(ssTable, System.nanoTime() - now);
+            keys = Pair.of(summary.first(), summary.last());
         }
         catch (IOException exception)
         {
@@ -286,6 +264,8 @@ public class SSTableReader implements SparkSSTableReader, Scannable
 
         if (keys == null)
         {
+            LOGGER.warn("Could not load first and last key from Summary.db file, so attempting Index.db fileName={}",
+                        ssTable.getDataFileName());
             now = System.nanoTime();
             keys = SSTableCache.INSTANCE.keysFromIndex(metadata, ssTable);
             stats.readIndexDb(ssTable, System.nanoTime() - now);
@@ -327,7 +307,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             this.partitionKeyFilters = ImmutableList.copyOf(matchInBloomFilter);
 
             // Check if required keys are actually present
-            if (matchInBloomFilter.isEmpty() || !ReaderUtils.anyFilterKeyInIndex(ssTable, metadata, descriptor, matchInBloomFilter))
+            if (matchInBloomFilter.isEmpty() || !ReaderUtils.anyFilterKeyInIndex(ssTable, matchInBloomFilter))
             {
                 if (matchInBloomFilter.isEmpty())
                 {
@@ -409,11 +389,11 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                                                 buildColumnFilter(metadata, columnFilter));
         this.metadata = metadata;
 
-        if (readIndexOffset)
+        if (readIndexOffset && summary != null)
         {
-            IndexSummary finalSummary = summary != null ? summary.summary() : null;
+            SummaryDbUtils.Summary finalSummary = summary;
             extractRange(sparkRangeFilter, partitionKeyFilters)
-                    .ifPresent(range -> readOffsets(finalSummary, range));
+                    .ifPresent(range -> readOffsets(finalSummary.summary(), range));
         }
         else
         {
@@ -486,53 +466,10 @@ public class SSTableReader implements SparkSSTableReader, Scannable
     {
         try
         {
-           if (indexSummary != null)
-            {
-                // BIG format
-                // If start is null we failed to find an overlapping token in the Index.db file,
-                // this is unlikely as we already pre-filter the SSTable based on the start-end token range.
-                // But in this situation we read the entire Data.db file to be safe, even if it hits performance.
-                startOffset = IndexDbUtils.findDataDbOffset(indexSummary, range, metadata.partitioner, ssTable, stats);
-            }
-            else
-            {
-                // BTI format
-                try (InputStream primaryIndex = ssTable.openPrimaryIndexStream())
-                {
-                    File file = new File(ssTable.getDataFileName());
-                    long size = ssTable.length(FileType.PARTITIONS_INDEX);
-                    try (ReadOnlyInputStreamFileChannel fileChannel = new ReadOnlyInputStreamFileChannel((BufferingInputStream<?>) primaryIndex, size);
-                         ChannelProxy proxy = new ChannelProxy(file, fileChannel);
-                         FileHandle fileHandle = new FileHandle.Builder(file).complete(f -> proxy);
-                         // disable index pre-loading to download only sstable trailer (contains first and last token)
-                         PartitionIndex partitionIndex = PartitionIndex.load(fileHandle, metadata.partitioner, false);
-                         PartitionIndex.Reader reader = partitionIndex.openReader())
-                    {
-                        Token startToken = null;
-                        if (metadata.partitioner instanceof Murmur3Partitioner)
-                        {
-                            startToken = new Murmur3Partitioner.LongToken(range.lowerEndpoint().longValue());
-                        }
-                        else
-                        {
-                            startToken = new RandomPartitioner.BigIntegerToken(range.lowerEndpoint());
-                        }
-                        Token.KeyBound maxKeyBound = startToken.maxKeyBound();
-                        startOffset = reader.ceiling(maxKeyBound, (position, assumeNoMatch, partitionPosition) -> position);
-                        if (startOffset != null)
-                        {
-                            // we got the offset from data file
-                            startOffset = ~startOffset;
-                            if (startOffset < 0)
-                            {
-                                LOGGER.error("Found invalid start offset in Data.db. Read from the begining of the file.");
-                                startOffset = null;
-                            }
-                        }
-                    }
-                }
-            }
-
+            // If start is null we failed to find an overlapping token in the Index.db file,
+            // this is unlikely as we already pre-filter the SSTable based on the start-end token range.
+            // But in this situation we read the entire Data.db file to be safe, even if it hits performance.
+            startOffset = IndexDbUtils.findDataDbOffset(indexSummary, range, metadata.partitioner, ssTable, stats);
             if (startOffset == null)
             {
                 LOGGER.error("Failed to find Data.db start offset, performance will be degraded sstable='{}'", ssTable);

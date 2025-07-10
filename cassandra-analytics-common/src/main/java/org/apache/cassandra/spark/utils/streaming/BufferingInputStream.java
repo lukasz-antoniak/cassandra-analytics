@@ -101,22 +101,6 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
         this.stats = stats;
     }
 
-    // Cassandra 4.x vs 5.x START
-    public BufferingInputStream(CassandraFileSource<T> source, BufferingInputStreamStats<T> stats, long position)
-    {
-        this(source, stats);
-        this.rangeStart = position;
-        this.bytesRead = position == 0 ? 0 : (position + 1);
-        this.bytesWritten.set(this.bytesRead);
-    }
-
-    public BufferingInputStream<T> reBuffer(long position)
-    {
-        closeInternal(false);
-        return new BufferingInputStream<>(source, stats, position);
-    }
-    // Cassandra 4.x vs 5.x END
-
     public long startTimeNanos()
     {
         return startTimeNanos;
@@ -363,29 +347,24 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
      * @param buffer the ByteBuffer
      * @throws EOFException if attempts to read beyond the end of the file
      * @throws IOException  for failure during I/O
-     * @return number of bytes read
      */
-    public int read(ByteBuffer buffer) throws IOException
+    public void read(ByteBuffer buffer) throws IOException
     {
-        int read = 0; // Cassandra 4.x vs 5.x
-        int remaining = buffer.remaining();
-        while (read < remaining)
+        for (int remainingLength = buffer.remaining(); 0 < remainingLength; remainingLength = buffer.remaining())
         {
             if (checkState() < 0)
             {
                 throw new EOFException();
             }
-            int readLength = Math.min(length - position, buffer.remaining());
+            int readLength = Math.min(length - position, remainingLength);
             if (0 < readLength)
             {
-                read += readLength;
                 currentBuffer.getBytes(position, buffer, readLength);
                 position += readLength;
                 bytesRead += readLength;
             }
             maybeReleaseBuffer();
         }
-        return read;
     }
 
     public static void ensureOffsetWithinBounds(int offset, int length, int bufferLength)
@@ -450,11 +429,6 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
     @Override
     public void close()
     {
-        closeInternal(true);
-    }
-
-    private void closeInternal(boolean releaseSource)
-    {
         if (state == StreamState.Closed)
         {
             return;
@@ -467,17 +441,6 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
         closed = true;
         releaseBuffer();
         queue.clear();
-        if (releaseSource)
-        {
-            try
-            {
-                source.close();
-            }
-            catch (Exception e)
-            {
-                // close quietly
-            }
-        }
     }
 
     @Override

@@ -300,11 +300,6 @@ public final class SSTableTombstoneWriter implements Closeable
             this.typeStatements = new ArrayList<>();
         }
 
-        public Builder inDirectory(String directory)
-        {
-            return inDirectory(new File(directory));
-        }
-
         /**
          * The directory where to write the SSTables (mandatory option).
          *

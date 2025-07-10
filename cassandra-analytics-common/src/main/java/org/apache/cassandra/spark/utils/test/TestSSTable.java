@@ -33,12 +33,9 @@ import java.util.stream.Stream;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import org.apache.cassandra.spark.data.FileSystemSource;
 import org.apache.cassandra.spark.data.FileType;
 import org.apache.cassandra.spark.data.SSTable;
-import org.apache.cassandra.spark.stats.BufferingInputStreamStats;
 import org.apache.cassandra.spark.utils.IOUtils;
-import org.apache.cassandra.spark.utils.streaming.BufferingInputStream;
 import org.jetbrains.annotations.Nullable;
 
 public final class TestSSTable extends SSTable
@@ -104,22 +101,11 @@ public final class TestSSTable extends SSTable
         Path filePath = fileComponentPath(fileType);
         try
         {
-            if (filePath == null)
-            {
-                return null;
-            }
-            // BTI requires random file access
-            return isBtiFormat()
-                   ? new BufferingInputStream<>(new FileSystemSource<>(this, fileType, filePath, !isBtiFormat()), BufferingInputStreamStats.doNothingStats())
-                   : new BufferedInputStream(new FileInputStream(filePath.toFile()));
+            return filePath != null ? new BufferedInputStream(new FileInputStream(filePath.toFile())) : null;
         }
         catch (FileNotFoundException exception)
         {
             return null;
-        }
-        catch (IOException e)
-        {
-            throw new RuntimeException(e);
         }
     }
 

@@ -98,7 +98,19 @@ public class SortedSSTableWriterTest
         tw.addRow(BigInteger.ONE, ImmutableMap.of("id", 1, "date", 1, "course", "foo", "marks", 1));
         tw.close(writerContext);
         assertThat(allSSTables).hasSize(1);
-        assertThat(allSSTables.get(0).baseFilename).isEqualTo(version.startsWith("cassandra-4.") ? "nb-1-big" : "da-2-bti");
+        String baseFileName = allSSTables.get(0).baseFilename;
+        if (version.startsWith("cassandra-4."))
+        {
+            assertThat(baseFileName).isEqualTo("nb-1-big");
+        }
+        else if (version.startsWith("cassandra-5."))
+        {
+            assertThat(baseFileName).isEqualTo("oa-2-big");
+        }
+        else
+        {
+            throw new UnsupportedOperationException("Unsupported version: " + version);
+        }
         Set<Path> dataFilePaths = new HashSet<>();
         try (DirectoryStream<Path> dataFileStream = Files.newDirectoryStream(tw.getOutDir(), "*Data.db"))
         {

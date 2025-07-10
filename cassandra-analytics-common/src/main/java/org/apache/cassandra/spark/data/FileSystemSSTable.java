@@ -63,9 +63,8 @@ public class FileSystemSSTable extends SSTable
         }
         try
         {
-            // BTI format requires random file access and re-buffering at given position
-            return useBufferingInputStream || isBtiFormat()
-                   ? new BufferingInputStream<>(new FileSystemSource<>(this, fileType, filePath, !isBtiFormat()), stats.get())
+            return useBufferingInputStream
+                   ? new BufferingInputStream<>(new FileSystemSource<>(this, fileType, filePath), stats.get())
                    : new BufferedInputStream(new FileInputStream(filePath.toFile()));
         }
         catch (FileNotFoundException exception)

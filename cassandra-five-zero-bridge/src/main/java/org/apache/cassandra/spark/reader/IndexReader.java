@@ -48,17 +48,17 @@ import org.apache.cassandra.utils.vint.VIntCoding;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class BigIndexReader implements IIndexReader
+public class IndexReader implements IIndexReader
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BigIndexReader.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(IndexReader.class);
 
     private TokenRange ssTableRange = null;
 
-    public BigIndexReader(@NotNull SSTable ssTable,
-                          @NotNull TableMetadata metadata,
-                          @Nullable SparkRangeFilter rangeFilter,
-                          @NotNull Stats stats,
-                          @NotNull IndexConsumer consumer)
+    public IndexReader(@NotNull SSTable ssTable,
+                       @NotNull TableMetadata metadata,
+                       @Nullable SparkRangeFilter rangeFilter,
+                       @NotNull Stats stats,
+                       @NotNull IndexConsumer consumer)
     {
         long now = System.nanoTime();
         long startTimeNanos = now;

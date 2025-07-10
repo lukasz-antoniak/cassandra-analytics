@@ -79,7 +79,7 @@ public class LocalCommitLog implements CommitLog
 
         try
         {
-            this.source = new FileSystemSource<>(this, FileType.COMMITLOG, path, true);
+            this.source = new FileSystemSource<>(this, FileType.COMMITLOG, path);
         }
         catch (IOException e)
         {

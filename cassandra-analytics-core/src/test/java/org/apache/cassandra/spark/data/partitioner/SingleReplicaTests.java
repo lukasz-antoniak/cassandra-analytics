@@ -271,7 +271,6 @@ public class SingleReplicaTests
 
     public static List<Named<String>> dataFileNames()
     {
-        return Arrays.asList(Named.of("BIG", "na-1-big-Data.db"),
-                             Named.of("BTI", "na-1-bti-Data.db"));
+        return Arrays.asList(Named.of("BIG", "na-1-big-Data.db"));
     }
 }

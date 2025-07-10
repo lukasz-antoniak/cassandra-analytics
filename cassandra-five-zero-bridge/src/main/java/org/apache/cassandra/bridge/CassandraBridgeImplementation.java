@@ -43,7 +43,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -72,7 +71,6 @@ import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.SSTableTombstoneWriter;
 import org.apache.cassandra.io.sstable.format.SSTableReader;
-import org.apache.cassandra.io.sstable.format.bti.BtiReaderUtils;
 import org.apache.cassandra.io.sstable.metadata.MetadataComponent;
 import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
@@ -91,10 +89,9 @@ import org.apache.cassandra.spark.data.TypeConverter;
 import org.apache.cassandra.spark.data.complex.CqlTuple;
 import org.apache.cassandra.spark.data.complex.CqlUdt;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
-import org.apache.cassandra.spark.reader.BtiIndexReader;
 import org.apache.cassandra.spark.reader.CompactionStreamScanner;
 import org.apache.cassandra.spark.reader.IndexEntry;
-import org.apache.cassandra.spark.reader.BigIndexReader;
+import org.apache.cassandra.spark.reader.IndexReader;
 import org.apache.cassandra.spark.reader.ReaderUtils;
 import org.apache.cassandra.spark.reader.RowData;
 import org.apache.cassandra.spark.reader.SchemaBuilder;
@@ -231,13 +228,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
         //NOTE: need to use SchemaBuilder to init keyspace if not already set in C* Schema instance
         SchemaBuilder schemaBuilder = new SchemaBuilder(table, partitioner);
         TableMetadata metadata = schemaBuilder.tableMetaData();
-        return new IndexIterator<>(ssTables, stats, ((ssTable, isRepairPrimary, consumer) -> {
-            if (ssTable.isBigFormat())
-            {
-                return new BigIndexReader(ssTable, metadata, rangeFilter, stats, consumer);
-            }
-            return new BtiIndexReader(ssTable, metadata, rangeFilter, stats, consumer);
-        }));
+        return new IndexIterator<>(ssTables, stats, ((ssTable, isRepairPrimary, consumer) -> new IndexReader(ssTable, metadata, rangeFilter, stats, consumer)));
     }
 
     @Override
@@ -377,60 +368,49 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                   })
                                                                   .sorted(Comparator.comparing(Pair::getLeft))
                                                                   .collect(Collectors.toList());
-
-        final int[] position = new int[]{0};
-
-        Function<ByteBuffer, Boolean> consumer = buffer -> {
-            DecoratedKey key = iPartitioner.decorateKey(buffer);
-            BigInteger token = TokenUtils.tokenToBigInteger(key.getToken());
-
-            Pair<BigInteger, Integer> current = sortedByTokens.get(position[0]);
-            int compare = token.compareTo(current.getLeft());
-            while (compare > 0)
+        try (InputStream primaryIndex = ssTable.openPrimaryIndexStream())
+        {
+            if (primaryIndex == null)
             {
-                // we passed without finding the key
-                result.set(current.getRight(), false);
-                position[0]++;
-                if (position[0] >= decoratedKeys.size())
-                {
-                    // if we've found all the keys we can exit early
-                    return true;
-                }
-                current = sortedByTokens.get(position[0]);
-                compare = token.compareTo(current.getLeft());
+                throw new IOException("Could not read Index.db file");
             }
 
-            ByteBuffer currentKey = partitionKeys.get(current.getRight());
-            if (compare == 0 && buffer.equals(currentKey))  // token and key matches
-            {
-                result.set(current.getRight(), true);
-                position[0]++;
-            }
+            final int[] position = new int[]{0};
+            ReaderUtils.readPrimaryIndex(primaryIndex, (buffer) -> {
+                DecoratedKey key = iPartitioner.decorateKey(buffer);
+                BigInteger token = TokenUtils.tokenToBigInteger(key.getToken());
 
-            // if we've found all the keys we can exit early
-            return position[0] >= decoratedKeys.size();
-        };
-
-        if (ssTable.isBtiFormat())
-        {
-            BtiReaderUtils.readPrimaryIndex(ssTable, iPartitioner, descriptor, 1.0, consumer);
-        }
-        else
-        {
-            try (InputStream primaryIndex = ssTable.openPrimaryIndexStream())
-            {
-                if (primaryIndex == null)
+                Pair<BigInteger, Integer> current = sortedByTokens.get(position[0]);
+                int compare = token.compareTo(current.getLeft());
+                while (compare > 0)
                 {
-                    throw new IOException("Could not read Index.db file");
+                    // we passed without finding the key
+                    result.set(current.getRight(), false);
+                    position[0]++;
+                    if (position[0] >= decoratedKeys.size())
+                    {
+                        // if we've found all the keys we can exit early
+                        return true;
+                    }
+                    current = sortedByTokens.get(position[0]);
+                    compare = token.compareTo(current.getLeft());
                 }
 
-                ReaderUtils.readPrimaryIndex(primaryIndex, consumer);
-            }
-        }
+                ByteBuffer currentKey = partitionKeys.get(current.getRight());
+                if (compare == 0 && buffer.equals(currentKey))  // token and key matches
+                {
+                    result.set(current.getRight(), true);
+                    position[0]++;
+                }
 
-        // mark as false any keys we didn't reach
-        IntStream.range(position[0], sortedByTokens.size())
-                 .forEach(i -> result.set(sortedByTokens.get(i).getRight(), false));
+                // if we've found all the keys we can exit early
+                return position[0] >= decoratedKeys.size();
+            });
+
+            // mark as false any keys we didn't reach
+            IntStream.range(position[0], sortedByTokens.size())
+                     .forEach(i -> result.set(sortedByTokens.get(i).getRight(), false));
+        }
 
         return result;
     }
@@ -624,8 +604,9 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                       String deleteStatement,
                                       Consumer<Writer> consumer)
     {
+        File cassFile = new File(directory.toFile());
         try (SSTableTombstoneWriter writer = SSTableTombstoneWriter.builder()
-                                                                   .inDirectory(directory.toFile().getAbsolutePath())
+                                                                   .inDirectory(cassFile)
                                                                    .forTable(createStatement)
                                                                    .withPartitioner(getPartitioner(partitioner))
                                                                    .using(deleteStatement)

@@ -110,7 +110,6 @@ public class KryoRegister implements KryoRegistrator
                                             .filter(string -> string != null && !string.isEmpty())
                                             .collect(Collectors.toSet());
 
-        // TODO(c4c5): Introduce single place to store default C* version.
         CassandraVersion cassandraVersion = BaseCassandraBridgeFactory.getCassandraVersion(configuration.get(CASSANDRA_VERSION, "4.0.0"));
         Class<?> registratorClass = KRYO_REGISTRATORS.get(cassandraVersion);
         if (registratorClass == null)

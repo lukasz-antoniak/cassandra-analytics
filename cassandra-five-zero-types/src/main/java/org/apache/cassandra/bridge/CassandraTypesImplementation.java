@@ -92,7 +92,7 @@ public class CassandraTypesImplementation extends CassandraTypes
             config.diagnostic_events_enabled = false;
             config.max_mutation_size = new DataStorageSpec.IntKibibytesBound(config.commitlog_segment_size.toKibibytes() / 2);
             config.concurrent_compactors = 4;
-            config.sstable.selected_format = "bti"; // TODO(c4c5): Make configurable. Do we need know it before initialization? Test without.
+            config.sstable.selected_format = "big";
             Path tempDirectory;
             try
             {
