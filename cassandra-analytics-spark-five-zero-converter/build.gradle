@@ -40,6 +40,7 @@ dependencies {
 jar {
     archiveFileName = "five-zero-sparksql.jar"
     dependsOn ':cassandra-analytics-spark-four-zero-converter:build'
+    // copy classes from V4 implementation and exclude duplicates that we override
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }

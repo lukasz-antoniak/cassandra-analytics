@@ -41,6 +41,7 @@ dependencies {
 jar {
     archiveFileName = "five-zero-avro.jar"
     dependsOn ':cassandra-four-zero-avro-converter:build'
+    // copy classes from V4 implementation and exclude duplicates that we override
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }

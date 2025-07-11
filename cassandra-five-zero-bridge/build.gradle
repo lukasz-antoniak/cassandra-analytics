@@ -31,6 +31,8 @@ configurations {
 dependencies {
     compileOnly project(":cassandra-analytics-common")
     compileOnly project(":cassandra-five-zero-types")
+    // some classes from cassandra-five-zero-types will be present in cassandra-four-zero-types module
+    compileOnly project(":cassandra-four-zero-types")
     compileOnly(project(':cassandra-bridge'))
     compileOnly project(":cassandra-analytics-spark-converter")
 
@@ -66,6 +68,7 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-bridge.jar"
+    dependsOn ':cassandra-five-zero-types:build'
 }
 
 test {
