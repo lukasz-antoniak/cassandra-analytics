@@ -26,9 +26,12 @@ plugins {
 configurations {
     all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
     all*.exclude(group: 'log4j', module: 'log4j')
+    implCassV4
 }
 
 dependencies {
+    implCassV4 project(':cassandra-four-zero-types')
+    compileOnly project(':cassandra-four-zero-types')
     compileOnly "org.slf4j:slf4j-api:${slf4jApiVersion}"
     compileOnly project(":cassandra-analytics-common")
     compileOnly(project(path: ':cassandra-five-zero', configuration: 'shadow'))
@@ -37,6 +40,10 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-types.jar"
+    dependsOn ':cassandra-four-zero-types:build'
+    // copy classes from V4 implementation and exclude duplicates that we override
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }
 
 test {
