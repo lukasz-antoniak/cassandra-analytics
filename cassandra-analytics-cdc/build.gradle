@@ -91,14 +91,14 @@ dependencies {
     testImplementation project(":cassandra-bridge")
     testImplementation(testFixtures(project(':cassandra-bridge')))
 
+    testImplementation project(":cassandra-four-zero-types")
+    testImplementation project(":cassandra-four-zero-bridge")
+    testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow')
     // unit tests are performed only with Cassandra 5, so skip declaring dependencies to prevent
     // indeterministic class loading
-    // testImplementation project(":cassandra-four-zero-bridge")
-    // testImplementation project(":cassandra-four-zero-types")
-    // testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow')
-    testImplementation project(":cassandra-five-zero-bridge")
-    testImplementation project(":cassandra-five-zero-types")
-    testImplementation project(path: ':cassandra-five-zero', configuration: 'shadow')
+    // testImplementation project(":cassandra-five-zero-bridge")
+    // testImplementation project(":cassandra-five-zero-types")
+    // testImplementation project(path: ':cassandra-five-zero', configuration: 'shadow')
 
     testImplementation(group: 'org.quicktheories', name: 'quicktheories', version: "${project.rootProject.quickTheoriesVersion}")
     testImplementation(group: 'com.google.guava', name: 'guava', version: '31.1-jre')
