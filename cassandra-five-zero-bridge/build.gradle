@@ -26,9 +26,16 @@ plugins {
 configurations {
     all*.exclude(group: 'org.slf4j', module: 'slf4j-log4j12')
     all*.exclude(group: 'log4j', module: 'log4j')
+    implCassV4
 }
 
 dependencies {
+    // base this module on Cassandra 4.x bridges
+    implCassV4 project(':cassandra-four-zero-bridge')
+    compileOnly project(':cassandra-four-zero-bridge')
+    testCompileOnly project(':cassandra-four-zero-types')
+    testCompileOnly project(':cassandra-four-zero-bridge')
+
     compileOnly project(":cassandra-analytics-common")
     compileOnly project(":cassandra-five-zero-types")
     // some classes from cassandra-five-zero-types will be present in cassandra-four-zero-types module
@@ -68,7 +75,11 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-bridge.jar"
-    dependsOn ':cassandra-five-zero-types:build'
+    dependsOn ':cassandra-five-zero-types:build' // trigger types build, so that dependent classes will be visible
+    dependsOn ':cassandra-four-zero-bridge:build'
+    // copy classes from V4 implementation and exclude duplicates that we override
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }
 }
 
 test {

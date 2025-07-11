@@ -35,7 +35,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 
-import org.apache.cassandra.cdc.FiveZeroMutation;
+import org.apache.cassandra.cdc.FourZeroMutation;
 import org.apache.cassandra.cdc.api.CassandraSource;
 import org.apache.cassandra.cdc.api.CommitLog;
 import org.apache.cassandra.cdc.api.CommitLogInstance;
@@ -61,7 +61,7 @@ import org.apache.cassandra.db.LivenessInfo;
 import org.apache.cassandra.db.Mutation;
 import org.apache.cassandra.db.commitlog.BufferingCommitLogReader;
 import org.apache.cassandra.db.commitlog.CommitLogSegmentManagerCDC;
-import org.apache.cassandra.db.commitlog.FiveZeroPartitionUpdateWrapper;
+import org.apache.cassandra.db.commitlog.FourZeroPartitionUpdateWrapper;
 import org.apache.cassandra.db.commitlog.PartitionUpdateWrapper;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.BTreeRow;
@@ -163,7 +163,7 @@ public class CdcBridgeImplementation extends CdcBridge
                                                  CassandraSource cassandraSource,
                                                  double traceSampleRate)
     {
-        return new CdcSortedStreamScanner(updates.stream().map(a -> (FiveZeroPartitionUpdateWrapper) a).collect(Collectors.toList()),
+        return new CdcSortedStreamScanner(updates.stream().map(a -> (FourZeroPartitionUpdateWrapper) a).collect(Collectors.toList()),
                                           endState,
                                           ThreadLocalRandom.current(),
                                           cassandraSource,
@@ -175,7 +175,7 @@ public class CdcBridgeImplementation extends CdcBridge
     public void log(TimeProvider timeProvider, CqlTable cqlTable, CommitLogInstance log, Row row, long timestamp)
     {
         final Mutation mutation = makeMutation(timeProvider, cqlTable, row, timestamp);
-        log.add(FiveZeroMutation.wrap(mutation));
+        log.add(FourZeroMutation.wrap(mutation));
     }
 
     @NotNull

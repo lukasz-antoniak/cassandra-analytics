@@ -81,6 +81,7 @@ import org.apache.cassandra.spark.utils.ByteBufferUtils;
 import org.apache.cassandra.spark.utils.IOUtils;
 import org.apache.cassandra.spark.utils.TimeUtils;
 import org.apache.cassandra.spark.utils.test.TestSchema;
+import org.apache.cassandra.transport.ProtocolVersion;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -459,7 +460,7 @@ public class CdcTests
                 byteBuffers.add(ByteBufferUtil.bytes(2));
                 byteBuffers.add(ByteBufferUtil.bytes(3));
                 byteBuffers.add(ByteBufferUtil.bytes(4));
-                return ImmutableList.of(CollectionSerializer.pack(byteBuffers, ByteBufferAccessor.instance, byteBuffers.size()));
+                return ImmutableList.of(CollectionSerializer.pack(byteBuffers, ByteBufferAccessor.instance, byteBuffers.size(), ProtocolVersion.V3));
             })
             .withCdcEventChecker((testRows, events) -> {
                 for (CdcEvent event : events)

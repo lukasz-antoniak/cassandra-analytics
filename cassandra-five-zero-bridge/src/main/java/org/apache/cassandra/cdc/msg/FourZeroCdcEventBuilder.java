@@ -48,14 +48,14 @@ import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.reader.ComplexTypeBuffer;
 
-public class FiveZeroCdcEventBuilder extends CdcEventBuilder
+public class FourZeroCdcEventBuilder extends CdcEventBuilder
 {
-    private static final Logger LOGGER = LoggerFactory.getLogger(FiveZeroCdcEventBuilder.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FourZeroCdcEventBuilder.class);
 
     private TableMetadata tableMetadata;
     private UnfilteredRowIterator partition = null;
 
-    FiveZeroCdcEventBuilder(CdcEvent.Kind kind, UnfilteredRowIterator partition, String trackingId, CassandraSource cassandraSource)
+    FourZeroCdcEventBuilder(CdcEvent.Kind kind, UnfilteredRowIterator partition, String trackingId, CassandraSource cassandraSource)
     {
         this(kind, partition.metadata().keyspace, partition.metadata().name, trackingId, cassandraSource);
         this.tableMetadata = partition.metadata();
@@ -64,7 +64,7 @@ public class FiveZeroCdcEventBuilder extends CdcEventBuilder
         setStaticColumns(partition);
     }
 
-    FiveZeroCdcEventBuilder(CdcEvent.Kind kind, String keyspace, String table, String trackingId, CassandraSource cassandraSource)
+    FourZeroCdcEventBuilder(CdcEvent.Kind kind, String keyspace, String table, String trackingId, CassandraSource cassandraSource)
     {
         super(kind, keyspace, table, trackingId, cassandraSource);
         this.kind = kind;
@@ -75,12 +75,12 @@ public class FiveZeroCdcEventBuilder extends CdcEventBuilder
         this.cassandraSource = cassandraSource;
     }
 
-    public static FiveZeroCdcEventBuilder of(CdcEvent.Kind kind,
+    public static FourZeroCdcEventBuilder of(CdcEvent.Kind kind,
                                              UnfilteredRowIterator partition,
                                              String trackingId,
                                              CassandraSource cassandraSource)
     {
-        return new FiveZeroCdcEventBuilder(kind, partition, trackingId, cassandraSource);
+        return new FourZeroCdcEventBuilder(kind, partition, trackingId, cassandraSource);
     }
 
     public static CdcEvent build(CdcEvent.Kind kind,
@@ -102,7 +102,7 @@ public class FiveZeroCdcEventBuilder extends CdcEventBuilder
                .build();
     }
 
-    public FiveZeroCdcEventBuilder withRow(Row row)
+    public FourZeroCdcEventBuilder withRow(Row row)
     {
         Preconditions.checkNotNull(partition, "Cannot build with an empty builder.");
         setClusteringKeys(row, partition);
@@ -357,7 +357,7 @@ public class FiveZeroCdcEventBuilder extends CdcEventBuilder
             updateMaxTimestamp(((RangeTombstoneBoundMarker) marker).deletionTime().markedForDeleteAt());
         }
 
-        ((FiveZeroRangeTombstoneBuilder) rangeTombstoneBuilder).add(marker);
+        ((FourZeroRangeTombstoneBuilder) rangeTombstoneBuilder).add(marker);
 
         if (rangeTombstoneBuilder.canBuild())
         {
@@ -365,8 +365,8 @@ public class FiveZeroCdcEventBuilder extends CdcEventBuilder
         }
     }
 
-    public FiveZeroRangeTombstoneBuilder rangeTombstoneBuilder(TableMetadata metadata)
+    public FourZeroRangeTombstoneBuilder rangeTombstoneBuilder(TableMetadata metadata)
     {
-        return new FiveZeroRangeTombstoneBuilder(metadata);
+        return new FourZeroRangeTombstoneBuilder(metadata);
     }
 }
