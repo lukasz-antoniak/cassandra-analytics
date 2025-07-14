@@ -138,7 +138,7 @@ test {
     minHeapSize = '1024m'
     maxHeapSize = '3072m'
     // maxParallelForks = Math.max(Runtime.runtime.availableProcessors() * 2, 6)
-    maxParallelForks = 3
+    maxParallelForks = 1
     forkEvery = 1  // Enables different end-to-end test classes use Spark contexts with different configurations
 
     // Make it so unit tests run on a Jar with Cassandra bridge implementations built in
