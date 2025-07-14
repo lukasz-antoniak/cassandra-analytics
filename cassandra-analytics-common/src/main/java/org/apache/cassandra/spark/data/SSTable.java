@@ -63,13 +63,7 @@ public abstract class SSTable implements Serializable, CassandraFile
     @Nullable
     public InputStream openPrimaryIndexStream()
     {
-        return openInputStream(isBigFormat() ? FileType.INDEX : FileType.PARTITIONS_INDEX); // Cassandra 4.x vs 5.x
-    }
-
-    @Nullable
-    public InputStream openRowIndexStream()
-    {
-        return openInputStream(FileType.ROWS_INDEX); // Cassandra 4.x vs 5.x
+        return openInputStream(FileType.INDEX);
     }
 
     @Nullable
@@ -100,7 +94,6 @@ public abstract class SSTable implements Serializable, CassandraFile
         {
             throw new IncompleteSSTableException(FileType.STATISTICS);
         }
-        // Cassandra 4.x vs 5.x START
         // Need Summary.db or Index.db to read first/last partition key
         if (isBigFormat() && isMissing(FileType.SUMMARY) && isMissing(FileType.INDEX))
         {
@@ -111,12 +104,10 @@ public abstract class SSTable implements Serializable, CassandraFile
         {
             throw new IncompleteSSTableException(FileType.PARTITIONS_INDEX);
         }
-        // Cassandra 4.x vs 5.x END
     }
 
     public abstract String getDataFileName();
 
-    // Cassandra 4.x vs 5.x END
     public boolean isBigFormat()
     {
         return getDataFileName().contains("-big-");
@@ -126,5 +117,4 @@ public abstract class SSTable implements Serializable, CassandraFile
     {
         return getDataFileName().contains("-bti-");
     }
-    // Cassandra 4.x vs 5.x END
 }

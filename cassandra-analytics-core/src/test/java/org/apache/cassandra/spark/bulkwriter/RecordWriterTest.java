@@ -47,6 +47,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import org.apache.cassandra.bridge.CassandraVersion;
+import org.apache.cassandra.bridge.CassandraVersionFeatures;
 import org.apache.cassandra.spark.bulkwriter.token.ConsistencyLevel;
 import org.apache.cassandra.spark.bulkwriter.token.TokenRangeMapping;
 import org.apache.cassandra.spark.common.model.CassandraInstance;
@@ -555,7 +556,8 @@ class RecordWriterTest
 
     private static int expectedUploadedSStables(String version)
     {
-        return UPLOADED_SSTABLES + (version.startsWith("cassandra-5.") ? 1 : 0);
+        CassandraVersionFeatures cvf = CassandraVersionFeatures.cassandraVersionFeaturesFromCassandraVersion(version);
+        return UPLOADED_SSTABLES + (cvf.getMajorVersion() >= 50 ? 1 : 0);
     }
 
     public static Iterable<Object[]> data()

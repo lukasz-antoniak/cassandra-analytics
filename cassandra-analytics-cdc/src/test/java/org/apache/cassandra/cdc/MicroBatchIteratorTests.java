@@ -372,7 +372,7 @@ public class MicroBatchIteratorTests
                             .build();
         CqlTable cqlTable = schema.buildTable();
         new SchemaBuilder(cqlTable, Partitioner.Murmur3Partitioner, schema.withCdc);
-        schema.setCassandraVersion(CassandraVersion.FIVEZERO);
+        schema.setCassandraVersion(CassandraVersion.FOURONE);
 
         try
         {

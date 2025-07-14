@@ -94,8 +94,7 @@ dependencies {
     testImplementation project(":cassandra-four-zero-types")
     testImplementation project(":cassandra-four-zero-bridge")
     testImplementation project(path: ':cassandra-four-zero', configuration: 'shadow')
-    // unit tests are performed only with Cassandra 5, so skip declaring dependencies to prevent
-    // indeterministic class loading
+    // unit tests are performed only with Cassandra 4
     // testImplementation project(":cassandra-five-zero-bridge")
     // testImplementation project(":cassandra-five-zero-types")
     // testImplementation project(path: ':cassandra-five-zero', configuration: 'shadow')
@@ -137,9 +136,9 @@ jar {
 
 test {
     minHeapSize = '1024m'
-    maxHeapSize = '1024m'
+    maxHeapSize = '3072m'
     // maxParallelForks = Math.max(Runtime.runtime.availableProcessors() * 2, 6)
-    maxParallelForks = 4
+    maxParallelForks = 3
     forkEvery = 1  // Enables different end-to-end test classes use Spark contexts with different configurations
 
     // Make it so unit tests run on a Jar with Cassandra bridge implementations built in

@@ -50,6 +50,16 @@ configurations {
     fourzeroTypes {
         description = 'Cassandra 4.0 Data Types'
     }
+
+    fivezero {
+        description = 'Cassandra 5.0 dependency'
+    }
+    fivezeroBridge {
+        description = 'Bridge to Cassandra 5.0'
+    }
+    fivezeroTypes {
+        description = 'Cassandra 5.0 Data Types'
+    }
 }
 
 dependencies {

@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.cassandra.io.compress.ICompressor;
-import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.CompressionParams;
 import org.apache.cassandra.spark.reader.common.AbstractCompressionMetadata;
 import org.apache.cassandra.spark.reader.common.BigLongArray;
@@ -111,16 +110,5 @@ public class CompressionMetadata extends AbstractCompressionMetadata
     protected double crcCheckChance()
     {
         return crcCheckChance;
-    }
-
-    public org.apache.cassandra.io.compress.CompressionMetadata toInternal(File file, long compressedFileLength)
-    {
-        AlignedReadonlyLongArrayMemory memory = new AlignedReadonlyLongArrayMemory(chunkOffsets);
-        return new org.apache.cassandra.io.compress.CompressionMetadata(file,
-                                                                        parameters,
-                                                                        memory,
-                                                                        memory.size(),
-                                                                        getDataLength(),
-                                                                        compressedFileLength);
     }
 }
