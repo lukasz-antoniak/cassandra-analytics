@@ -21,6 +21,7 @@ package org.apache.cassandra.cdc;
 
 import org.apache.cassandra.cdc.api.Mutation;
 
+// TODO(c4c5): Do we want to keep V4 and V5 mutations with different class names?
 public class FourZeroMutation implements Mutation
 {
     public final org.apache.cassandra.db.Mutation mutation;

@@ -100,7 +100,8 @@ public class SortedSSTableWriterTest
         assertThat(allSSTables).hasSize(1);
         String baseFileName = allSSTables.get(0).baseFilename;
         CassandraVersionFeatures cvf = CassandraVersionFeatures.cassandraVersionFeaturesFromCassandraVersion(version);
-        switch (cvf.getMajorVersion()) {
+        switch (cvf.getMajorVersion())
+        {
             case 40:
             case 41:
                 assertThat(baseFileName).isEqualTo("nb-1-big");
