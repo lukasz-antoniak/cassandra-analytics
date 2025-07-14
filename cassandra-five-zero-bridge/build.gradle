@@ -34,7 +34,9 @@ dependencies {
     implCassV4 project(':cassandra-four-zero-bridge')
     compileOnly project(':cassandra-four-zero-bridge')
     testCompileOnly project(':cassandra-four-zero-types')
+    testRuntimeOnly project(':cassandra-four-zero-types')
     testCompileOnly project(':cassandra-four-zero-bridge')
+    testRuntimeOnly project(':cassandra-four-zero-bridge')
 
     compileOnly project(":cassandra-analytics-common")
     compileOnly project(":cassandra-five-zero-types")

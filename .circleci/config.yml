@@ -154,7 +154,7 @@ jobs:
   spark3-2_12-jdk11:
     docker:
       - image: cimg/openjdk:11.0
-    resource_class: xlarge
+    resource_class: large
     steps:
       - install_common
       - checkout
@@ -212,7 +212,7 @@ jobs:
   spark3-2_13-jdk11:
     docker:
       - image: cimg/openjdk:11.0
-    resource_class: xlarge
+    resource_class: large
     steps:
       - install_common
       - checkout
