@@ -33,6 +33,7 @@ dependencies {
     // base this module on Cassandra 4.x bridges
     implCassV4 project(':cassandra-four-zero-bridge')
     compileOnly project(':cassandra-four-zero-bridge')
+    // test runtime dependencies are needed to make V4 main classes visible during unit test execution
     testCompileOnly project(':cassandra-four-zero-types')
     testRuntimeOnly project(':cassandra-four-zero-types')
     testCompileOnly project(':cassandra-four-zero-bridge')
