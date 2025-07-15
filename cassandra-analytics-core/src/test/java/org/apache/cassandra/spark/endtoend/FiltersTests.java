@@ -352,7 +352,7 @@ public class FiltersTests
                                // Test with LZ4 enabled & disabled
                                .withColumns("pk", "ck", "a")  // Partition/clustering keys are always required
                                .withExpectedRowCountPerSSTable(Tester.DEFAULT_NUM_ROWS)
-                               .withStatsClass(MiscTests.class.getName() + ".STATS")  // Override stats so we can count bytes skipped
+                               .withStatsClass(FiltersTests.class.getName() + ".STATS")  // Override stats so we can count bytes skipped
                                .withCheck(dataset -> {
                                    FiltersTests.resetStats();
                                    List<Row> rows = dataset.collectAsList();

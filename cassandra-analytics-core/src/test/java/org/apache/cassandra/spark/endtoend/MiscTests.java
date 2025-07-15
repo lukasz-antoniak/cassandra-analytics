@@ -34,8 +34,6 @@ import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.apache.spark.sql.Row;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.quicktheories.QuickTheory.qt;

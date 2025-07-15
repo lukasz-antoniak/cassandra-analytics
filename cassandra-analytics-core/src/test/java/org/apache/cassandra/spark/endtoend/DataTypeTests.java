@@ -749,9 +749,9 @@ public class DataTypeTests
                 udt.put("b", udtIndex < midPoint ? UUID.randomUUID().toString() : null);
                 udtSet.add(udt);
             }
-            Object[] tuple = new Object[]{ RandomUtils.RANDOM.nextLong(),
-                                           tupleIndex < midPoint ? UUID.randomUUID().toString() : null,
-                                           RandomUtils.RANDOM.nextInt()};
+            Object[] tuple = new Object[]{RandomUtils.RANDOM.nextLong(),
+                                          tupleIndex < midPoint ? UUID.randomUUID().toString() : null,
+                                          RandomUtils.RANDOM.nextInt()};
 
             udtSetValues.put(pk, udtSet);
             tupleValues.put(pk, tuple);

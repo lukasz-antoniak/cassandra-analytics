@@ -101,7 +101,7 @@ class BulkWriteS3CompatModeSimpleTest extends SharedClusterSparkIntegrationTestB
     protected void beforeTestStart()
     {
         super.beforeTestStart();
-        waitForSchemaReady(30, TimeUnit.SECONDS);
+        waitForSchemaReady(10, TimeUnit.SECONDS);
     }
 
     private S3ProxyConfiguration buildTestS3ProxyConfig()
