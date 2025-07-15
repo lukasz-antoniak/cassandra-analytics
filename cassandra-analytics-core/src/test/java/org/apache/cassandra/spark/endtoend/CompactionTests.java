@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.collect.ImmutableSet;
 import org.apache.commons.lang3.mutable.MutableLong;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("Sequential")
 public class CompactionTests
 {
     @ParameterizedTest

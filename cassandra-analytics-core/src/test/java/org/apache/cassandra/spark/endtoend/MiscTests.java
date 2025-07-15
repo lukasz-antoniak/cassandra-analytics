@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -54,6 +55,7 @@ import static org.quicktheories.generators.SourceDSL.booleans;
  * to verify Spark Bulk Reader correctly purges tombstoned data.
  */
 
+@Tag("Sequential")
 public class MiscTests
 {
     /* Partial Rows: test reading rows with missing columns */

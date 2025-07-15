@@ -153,17 +153,72 @@ jar {
     }
 }
 
+tasks.register('testSequential', Test) {
+    if (JavaVersion.current().isJava11Compatible()) {
+        def JDK11_OPTIONS = ['-Djdk.attach.allowAttachSelf=true',
+                             '--add-exports', 'java.base/jdk.internal.misc=ALL-UNNAMED',
+                             '--add-exports', 'java.base/jdk.internal.ref=ALL-UNNAMED',
+                             '--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED',
+                             '--add-exports', 'java.management.rmi/com.sun.jmx.remote.internal.rmi=ALL-UNNAMED',
+                             '--add-exports', 'java.rmi/sun.rmi.registry=ALL-UNNAMED',
+                             '--add-exports', 'java.rmi/sun.rmi.server=ALL-UNNAMED',
+                             '--add-exports', 'java.sql/java.sql=ALL-UNNAMED',
+                             '--add-opens', 'java.base/java.lang.module=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.loader=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.reflect=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.math=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.module=ALL-UNNAMED',
+                             '--add-opens', 'java.base/jdk.internal.util.jar=ALL-UNNAMED',
+                             '--add-opens', 'jdk.management/com.sun.management.internal=ALL-UNNAMED']
+        jvmArgs(JDK11_OPTIONS)
+        println("JVM arguments for $project.name are $allJvmArgs")
+    }
+
+    minHeapSize = '1024m'
+    maxHeapSize = '3072m'
+    maxParallelForks = 1
+    forkEvery = 1  // Enables different end-to-end test classes use Spark contexts with different configurations
+
+    shouldRunAfter test
+
+    // Make it so unit tests run on a Jar with Cassandra bridge implementations built in
+    classpath += files(jar.archiveFile)
+    useJUnitPlatform {
+        includeTags 'Sequential'
+    }
+
+    reports {
+        def destDir = Paths.get(rootProject.rootDir.absolutePath, "build", "test-reports", "core").toFile()
+        junitXml {
+            enabled true
+            destination = destDir
+        }
+        html {
+            enabled true
+            destination = destDir
+        }
+    }
+
+    testLogging {
+        events "started", "passed", "skipped", "failed"
+    }
+
+    finalizedBy jacocoTestReport // report is always generated after tests run
+}
+
 test {
     minHeapSize = '1024m'
     maxHeapSize = '3072m'
-    // maxParallelForks = Math.max(Runtime.runtime.availableProcessors() * 2, 6)
-    maxParallelForks = 2
+    maxParallelForks = Math.max(Runtime.runtime.availableProcessors() * 2, 8)
     forkEvery = 1  // Enables different end-to-end test classes use Spark contexts with different configurations
 
     // Make it so unit tests run on a Jar with Cassandra bridge implementations built in
     dependsOn(tasks.jar)
     classpath += files(jar.archiveFile)
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'Sequential'
+    }
     reports {
         def destDir = Paths.get(rootProject.rootDir.absolutePath, "build", "test-reports", "core").toFile()
         junitXml {
@@ -207,6 +262,7 @@ jacocoTestCoverageVerification {
 }
 
 check {
+    dependsOn(tasks.testSequential)
     dependsOn(tasks.jacocoTestCoverageVerification)
     finalizedBy(tasks.jacocoTestReport)
 }

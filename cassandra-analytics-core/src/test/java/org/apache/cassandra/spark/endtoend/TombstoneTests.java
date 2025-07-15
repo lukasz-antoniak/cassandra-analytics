@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.spark.endtoend;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -35,6 +36,7 @@ import static org.quicktheories.QuickTheory.qt;
 import static org.quicktheories.generators.SourceDSL.characters;
 import static org.quicktheories.generators.SourceDSL.integers;
 
+@Tag("Sequential")
 public class TombstoneTests
 {
     @ParameterizedTest
