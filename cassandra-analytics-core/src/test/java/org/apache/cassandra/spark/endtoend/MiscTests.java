@@ -20,23 +20,31 @@
 package org.apache.cassandra.spark.endtoend;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.spark.TestUtils;
 import org.apache.cassandra.spark.Tester;
 import org.apache.cassandra.spark.data.CqlField;
+import org.apache.cassandra.spark.data.SSTable;
+import org.apache.cassandra.spark.stats.BufferingInputStreamStats;
+import org.apache.cassandra.spark.utils.streaming.CassandraFileSource;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.apache.spark.sql.Row;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.quicktheories.QuickTheory.qt;
+import static org.quicktheories.generators.SourceDSL.booleans;
 
 /**
  * End-to-end tests that write random data to multiple SSTables,
@@ -388,5 +396,89 @@ public class MiscTests
                   }
               })
               .run(bridge.getVersion());
+    }
+
+    // CHECKSTYLE IGNORE: Despite being static and final, this is a mutable field not to be confused with a constant
+    private static final AtomicLong skippedRawBytes = new AtomicLong(0L);
+    private static final AtomicLong skippedInputStreamBytes = new AtomicLong(0L);  // CHECKSTYLE IGNORE: Ditto
+    private static final AtomicLong skippedRangeBytes = new AtomicLong(0L);        // CHECKSTYLE IGNORE: Ditto
+
+    private static void resetStats()
+    {
+        skippedRawBytes.set(0L);
+        skippedInputStreamBytes.set(0L);
+        skippedRangeBytes.set(0L);
+    }
+
+    @SuppressWarnings("unused")  // Actually used via reflection in testLargeBlobExclude()
+    public static final Stats STATS = new Stats()
+    {
+        @Override
+        public void skippedBytes(long length)
+        {
+            skippedRawBytes.addAndGet(length);
+        }
+
+        public BufferingInputStreamStats<SSTable> bufferingInputStreamStats()
+        {
+            return new BufferingInputStreamStats<SSTable>()
+            {
+                @Override
+                public void inputStreamBytesSkipped(CassandraFileSource<SSTable> ssTable,
+                                                    long bufferedSkipped,
+                                                    long rangeSkipped)
+                {
+                    skippedInputStreamBytes.addAndGet(bufferedSkipped);
+                    skippedRangeBytes.addAndGet(rangeSkipped);
+                }
+            };
+        }
+    };
+
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.bridge.VersionRunner#bridges")
+    public void testLargeBlobExclude(CassandraBridge bridge)
+    {
+        qt().forAll(booleans().all())
+            .checkAssert(enableCompression ->
+                         Tester.builder(TestSchema.builder(bridge)
+                                                  .withPartitionKey("pk", bridge.uuid())
+                                                  .withClusteringKey("ck", bridge.aInt())
+                                                  .withColumn("a", bridge.bigint())
+                                                  .withColumn("b", bridge.text())
+                                                  .withColumn("c", bridge.blob())
+                                                  .withBlobSize(400000)  // Override blob size to write large blobs that we can skip
+                                                  .withCompression(enableCompression))
+                               // Test with LZ4 enabled & disabled
+                               .withColumns("pk", "ck", "a")  // Partition/clustering keys are always required
+                               .withExpectedRowCountPerSSTable(Tester.DEFAULT_NUM_ROWS)
+                               .withStatsClass(MiscTests.class.getName() + ".STATS")  // Override stats so we can count bytes skipped
+                               .withCheck(dataset -> {
+                                   MiscTests.resetStats();
+                                   List<Row> rows = dataset.collectAsList();
+                                   assertFalse(rows.isEmpty());
+                                   for (Row row : rows)
+                                   {
+                                       assertTrue(row.schema().getFieldIndex("pk").isDefined());
+                                       assertTrue(row.schema().getFieldIndex("ck").isDefined());
+                                       assertTrue(row.schema().getFieldIndex("a").isDefined());
+                                       assertFalse(row.schema().getFieldIndex("b").isDefined());
+                                       assertFalse(row.schema().getFieldIndex("c").isDefined());
+                                       assertEquals(3, row.length());
+                                       assertTrue(row.get(0) instanceof String);
+                                       assertTrue(row.get(1) instanceof Integer);
+                                       assertTrue(row.get(2) instanceof Long);
+                                   }
+                                   // TODO(c4c5): Why statistics are zero for C* 5 bridge?
+                                   if (bridge.getVersion().versionNumber() < 5)
+                                   {
+                                       assertTrue(skippedRawBytes.get() > 50_000_000);
+                                       assertTrue(skippedInputStreamBytes.get() > 2_500_000);
+                                       assertTrue(skippedRangeBytes.get() > 5_000_000);
+                                   }
+                               })
+                               .withReset(MiscTests::resetStats)
+                               .run(bridge.getVersion())
+            );
     }
 }
