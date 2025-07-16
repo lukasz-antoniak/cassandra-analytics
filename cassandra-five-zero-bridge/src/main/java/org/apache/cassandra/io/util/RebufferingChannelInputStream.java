@@ -27,11 +27,18 @@ import java.nio.channels.ReadableByteChannel;
 
 public class RebufferingChannelInputStream extends RebufferingInputStream
 {
+    private static final int DEFAULT_BUFFER_SIZE = 16384;
+
     private final ReadableByteChannel channel;
 
     public RebufferingChannelInputStream(InputStream inputStream)
     {
-        super(ByteBuffer.allocate(1 << 14)); // TODO(lantoniak): Make buffer size configurable?
+        this(inputStream, DEFAULT_BUFFER_SIZE);
+    }
+
+    public RebufferingChannelInputStream(InputStream inputStream, int bufferSize)
+    {
+        super(ByteBuffer.allocate(bufferSize <= 0 ? DEFAULT_BUFFER_SIZE : bufferSize));
         this.channel = Channels.newChannel(inputStream);
         this.buffer.limit(0);
     }

@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 import java.util.zip.CRC32;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.primitives.Ints;
 
 import org.apache.cassandra.db.Clustering;
 import org.apache.cassandra.db.ClusteringPrefix;
@@ -67,6 +68,7 @@ import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.utils.ByteBufferUtils;
 import org.apache.cassandra.spark.utils.Pair;
+import org.apache.cassandra.spark.utils.streaming.BufferingInputStream;
 import org.apache.cassandra.utils.BloomFilter;
 import org.apache.cassandra.utils.BloomFilterSerializer;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -595,13 +597,27 @@ public final class ReaderUtils extends TokenUtils
         {
             if (filterStream != null)
             {
+                int bufferSize = inputStreamBufferSize(filterStream);
                 try (DataInputStream dis = new DataInputStream(filterStream);
-                     DataInputPlus.DataInputStreamPlus in = new RebufferingChannelInputStream(dis))
+                     DataInputPlus.DataInputStreamPlus in = new RebufferingChannelInputStream(dis, bufferSize))
                 {
                     return BloomFilterSerializer.forVersion(hasOldBfFormat).deserialize(in);
                 }
             }
         }
         throw new FileNotFoundException();
+    }
+
+    /**
+     * If known, return internal buffer size of given input stream, {@code -1} otherwise.
+     */
+    public static int inputStreamBufferSize(InputStream inputStream)
+    {
+        if (inputStream instanceof BufferingInputStream<?>)
+        {
+            BufferingInputStream<?> bis = (BufferingInputStream<?>) inputStream;
+            return Ints.checkedCast(bis.chunkBufferSize());
+        }
+        return -1;
     }
 }

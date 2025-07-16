@@ -112,8 +112,9 @@ public final class SummaryDbUtils
             return null;
         }
 
+        int bufferSize = ReaderUtils.inputStreamBufferSize(summaryStream);
         try (DataInputStream is = new DataInputStream(summaryStream);
-             DataInputPlus.DataInputStreamPlus dis = new RebufferingChannelInputStream(is))
+             DataInputPlus.DataInputStreamPlus dis = new RebufferingChannelInputStream(is, bufferSize))
         {
             IndexSummary indexSummary = IndexSummary.serializer.deserialize(dis, partitioner, minIndexInterval, maxIndexInterval);
             DecoratedKey firstKey = partitioner.decorateKey(ByteBufferUtil.readWithLength(dis));
