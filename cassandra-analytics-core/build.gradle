@@ -153,11 +153,12 @@ jar {
     }
 }
 
+// Tests tagged 'Sequential' do not run in parallel, to prevent OOM errors
+// when running in CI environment.
 tasks.register('testSequential', Test) {
     doFirst {
         if (JavaVersion.current().isJava11Compatible()) {
-            def JDK11_OPTIONS = ['-XX:-MaxFDLimit',
-                                 '-Djdk.attach.allowAttachSelf=true',
+            def JDK11_OPTIONS = ['-Djdk.attach.allowAttachSelf=true',
                                  '--add-exports', 'java.base/jdk.internal.misc=ALL-UNNAMED',
                                  '--add-exports', 'java.base/jdk.internal.ref=ALL-UNNAMED',
                                  '--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED',
