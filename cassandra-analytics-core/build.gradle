@@ -154,25 +154,28 @@ jar {
 }
 
 tasks.register('testSequential', Test) {
-    if (JavaVersion.current().isJava11Compatible()) {
-        def JDK11_OPTIONS = ['-Djdk.attach.allowAttachSelf=true',
-                             '--add-exports', 'java.base/jdk.internal.misc=ALL-UNNAMED',
-                             '--add-exports', 'java.base/jdk.internal.ref=ALL-UNNAMED',
-                             '--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED',
-                             '--add-exports', 'java.management.rmi/com.sun.jmx.remote.internal.rmi=ALL-UNNAMED',
-                             '--add-exports', 'java.rmi/sun.rmi.registry=ALL-UNNAMED',
-                             '--add-exports', 'java.rmi/sun.rmi.server=ALL-UNNAMED',
-                             '--add-exports', 'java.sql/java.sql=ALL-UNNAMED',
-                             '--add-opens', 'java.base/java.lang.module=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.loader=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.reflect=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.math=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.module=ALL-UNNAMED',
-                             '--add-opens', 'java.base/jdk.internal.util.jar=ALL-UNNAMED',
-                             '--add-opens', 'jdk.management/com.sun.management.internal=ALL-UNNAMED']
-        jvmArgs(JDK11_OPTIONS)
-        println("JVM arguments for $project.name are $allJvmArgs")
+    doFirst {
+        if (JavaVersion.current().isJava11Compatible()) {
+            def JDK11_OPTIONS = ['-XX:-MaxFDLimit',
+                                 '-Djdk.attach.allowAttachSelf=true',
+                                 '--add-exports', 'java.base/jdk.internal.misc=ALL-UNNAMED',
+                                 '--add-exports', 'java.base/jdk.internal.ref=ALL-UNNAMED',
+                                 '--add-exports', 'java.base/sun.nio.ch=ALL-UNNAMED',
+                                 '--add-exports', 'java.management.rmi/com.sun.jmx.remote.internal.rmi=ALL-UNNAMED',
+                                 '--add-exports', 'java.rmi/sun.rmi.registry=ALL-UNNAMED',
+                                 '--add-exports', 'java.rmi/sun.rmi.server=ALL-UNNAMED',
+                                 '--add-exports', 'java.sql/java.sql=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/java.lang.module=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.loader=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.ref=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.reflect=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.math=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.module=ALL-UNNAMED',
+                                 '--add-opens', 'java.base/jdk.internal.util.jar=ALL-UNNAMED',
+                                 '--add-opens', 'jdk.management/com.sun.management.internal=ALL-UNNAMED']
+            jvmArgs(JDK11_OPTIONS)
+            println("JVM arguments for $project.name are $allJvmArgs")
+        }
     }
 
     minHeapSize = '1024m'
@@ -180,10 +183,10 @@ tasks.register('testSequential', Test) {
     maxParallelForks = 1
     forkEvery = 1  // Enables different end-to-end test classes use Spark contexts with different configurations
 
-    shouldRunAfter test
-
     // Make it so unit tests run on a Jar with Cassandra bridge implementations built in
+    dependsOn(tasks.jar)
     classpath += files(jar.archiveFile)
+
     useJUnitPlatform {
         includeTags 'Sequential'
     }
@@ -204,6 +207,7 @@ tasks.register('testSequential', Test) {
         events "started", "passed", "skipped", "failed"
     }
 
+    shouldRunAfter test
     finalizedBy jacocoTestReport // report is always generated after tests run
 }
 
@@ -216,6 +220,7 @@ test {
     // Make it so unit tests run on a Jar with Cassandra bridge implementations built in
     dependsOn(tasks.jar)
     classpath += files(jar.archiveFile)
+
     useJUnitPlatform {
         excludeTags 'Sequential'
     }
@@ -234,6 +239,8 @@ test {
     testLogging {
         events "started", "passed", "skipped", "failed"
     }
+
+    finalizedBy jacocoTestReport // report is always generated after tests run
 }
 
 /* Start: JaCoCo check */
@@ -242,7 +249,7 @@ jacoco {
 }
 
 jacocoTestReport {
-    executionData(files("$buildDir/jacoco/test.exec"))
+    executionData tasks.withType(Test)
     reports {
         html.required = true
         html.destination(file("$buildDir/reports/jacocoHtml"))
@@ -250,7 +257,9 @@ jacocoTestReport {
         xml.destination(file("$buildDir/reports/jacocoXml"))
     }
 }
+
 jacocoTestCoverageVerification {
+    dependsOn(tasks.testSequential)
     executionData(tasks.jacocoTestReport.executionData)
     violationRules {
         rule {
