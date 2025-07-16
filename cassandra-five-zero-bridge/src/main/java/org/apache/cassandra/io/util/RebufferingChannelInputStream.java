@@ -25,11 +25,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 
-public class DataInputStreamPlusImpl extends RebufferingInputStream
+public class RebufferingChannelInputStream extends RebufferingInputStream
 {
     private final ReadableByteChannel channel;
 
-    public DataInputStreamPlusImpl(InputStream inputStream)
+    public RebufferingChannelInputStream(InputStream inputStream)
     {
         super(ByteBuffer.allocate(1 << 14)); // TODO(lantoniak): Make buffer size configurable?
         this.channel = Channels.newChannel(inputStream);

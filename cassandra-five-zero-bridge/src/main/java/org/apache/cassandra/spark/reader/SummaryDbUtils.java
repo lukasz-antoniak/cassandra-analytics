@@ -29,7 +29,7 @@ import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummary;
 import org.apache.cassandra.io.util.DataInputPlus;
-import org.apache.cassandra.io.util.DataInputStreamPlusImpl;
+import org.apache.cassandra.io.util.RebufferingChannelInputStream;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -113,7 +113,7 @@ public final class SummaryDbUtils
         }
 
         try (DataInputStream is = new DataInputStream(summaryStream);
-             DataInputPlus.DataInputStreamPlus dis = new DataInputStreamPlusImpl(is))
+             DataInputPlus.DataInputStreamPlus dis = new RebufferingChannelInputStream(is))
         {
             IndexSummary indexSummary = IndexSummary.serializer.deserialize(dis, partitioner, minIndexInterval, maxIndexInterval);
             DecoratedKey firstKey = partitioner.decorateKey(ByteBufferUtil.readWithLength(dis));

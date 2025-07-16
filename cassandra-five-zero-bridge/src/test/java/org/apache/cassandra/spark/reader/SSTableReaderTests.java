@@ -65,7 +65,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.util.DataInputPlus;
-import org.apache.cassandra.io.util.DataInputStreamPlusImpl;
+import org.apache.cassandra.io.util.RebufferingChannelInputStream;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.serializers.UTF8Serializer;
@@ -132,7 +132,7 @@ public class SSTableReaderTests
                     long bytesRead = 0;
                     try (InputStream dis = new BufferedInputStream(Files.newInputStream(dataFile));
                          InputStream cis = new BufferedInputStream(Files.newInputStream(compressionFile));
-                         DataInputPlus.DataInputStreamPlus in = new DataInputStreamPlusImpl(new DataInputStream(
+                         DataInputPlus.DataInputStreamPlus in = new RebufferingChannelInputStream(new DataInputStream(
                          CompressedRawInputStream.fromInputStream(dis, cis, descriptor.version.hasMaxCompressedLength(), 1.0))))
                     {
                         while (in.read() >= 0)

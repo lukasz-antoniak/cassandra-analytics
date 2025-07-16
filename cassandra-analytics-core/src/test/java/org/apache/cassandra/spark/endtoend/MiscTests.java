@@ -471,13 +471,9 @@ public class MiscTests
                                        assertTrue(row.get(1) instanceof Integer);
                                        assertTrue(row.get(2) instanceof Long);
                                    }
-                                   // TODO(c4c5): Why statistics are zero for C* 5 bridge?
-                                   if (bridge.getVersion().versionNumber() < 5)
-                                   {
-                                       assertTrue(skippedRawBytes.get() > 50_000_000);
-                                       assertTrue(skippedInputStreamBytes.get() > 2_500_000);
-                                       assertTrue(skippedRangeBytes.get() > 5_000_000);
-                                   }
+                                   assertTrue(skippedRawBytes.get() > 50_000_000);
+                                   assertTrue(skippedInputStreamBytes.get() > 2_500_000);
+                                   assertTrue(skippedRangeBytes.get() > 5_000_000);
                                })
                                .withReset(MiscTests::resetStats)
                                .run(bridge.getVersion())

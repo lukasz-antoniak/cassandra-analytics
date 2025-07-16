@@ -60,7 +60,7 @@ import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataInputPlus;
-import org.apache.cassandra.io.util.DataInputStreamPlusImpl;
+import org.apache.cassandra.io.util.RebufferingChannelInputStream;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
@@ -596,7 +596,7 @@ public final class ReaderUtils extends TokenUtils
             if (filterStream != null)
             {
                 try (DataInputStream dis = new DataInputStream(filterStream);
-                     DataInputPlus.DataInputStreamPlus in = new DataInputStreamPlusImpl(dis))
+                     DataInputPlus.DataInputStreamPlus in = new RebufferingChannelInputStream(dis))
                 {
                     return BloomFilterSerializer.forVersion(hasOldBfFormat).deserialize(in);
                 }

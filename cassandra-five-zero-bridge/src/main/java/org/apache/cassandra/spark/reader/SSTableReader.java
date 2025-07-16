@@ -23,6 +23,7 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOError;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -69,7 +70,6 @@ import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
 import org.apache.cassandra.io.util.DataInputPlus;
-import org.apache.cassandra.io.util.DataInputStreamPlusImpl;
 import org.apache.cassandra.net.MessagingService;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.DroppedColumn;
@@ -631,7 +631,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                             startOffset, ssTable);
                 stats.skippedDataDbStartOffset(startOffset);
             }
-            in = new DataInputStreamPlusImpl(dis);
+            in = new DataInputStreamPlus(dis);
         }
 
         @Override
@@ -846,6 +846,14 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             public void close()
             {
             }
+        }
+    }
+
+    private static class DataInputStreamPlus extends DataInputStream implements DataInputPlus
+    {
+        DataInputStreamPlus(InputStream is)
+        {
+            super(is);
         }
     }
 }
