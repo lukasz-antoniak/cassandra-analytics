@@ -92,7 +92,7 @@ test {
     // Because system properties aren't passed from the command line through to tests, we need to specifically
     // set them again here.
     systemProperty "cassandra.test.dtest_jar_path", dependencyLocation
-    systemProperty "cassandra.sidecar.versions_to_test", System.getenv("SIDECAR_VERSIONS_TO_TEST")
+    systemProperty "cassandra.sidecar.versions_to_test", (System.getenv("SIDECAR_VERSIONS_TO_TEST") ?: "5.0")
     systemProperty "SKIP_STARTUP_VALIDATIONS", "true"
     systemProperty "logback.configurationFile", "src/test/resources/logback-test.xml"
     systemProperty "cassandra.integration.sidecar.test.enable_mtls", integrationEnableMtls
