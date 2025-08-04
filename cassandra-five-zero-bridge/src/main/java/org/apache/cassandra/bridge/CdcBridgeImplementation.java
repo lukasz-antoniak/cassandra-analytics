@@ -106,7 +106,6 @@ public class CdcBridgeImplementation extends CdcBridge
         DatabaseDescriptor.getRawConfig().saved_caches_directory = path.resolve("saved_caches").toString();
         DatabaseDescriptor.getRawConfig().cdc_raw_directory = path.resolve("cdc").toString();
         DatabaseDescriptor.setCDCEnabled(true);
-        DatabaseDescriptor.setCDCTotalSpaceInMiB(1024); // Cassandra 4.x vs 5.x
         DatabaseDescriptor.setCommitLogSync(Config.CommitLogSync.periodic);
         if (enableCompression)
         {
@@ -118,7 +117,6 @@ public class CdcBridgeImplementation extends CdcBridge
         DatabaseDescriptor.setCommitLogSyncGroupWindow(30);
         DatabaseDescriptor.setCommitLogSegmentSize(commitLogSegmentSize);
         DatabaseDescriptor.getRawConfig().commitlog_total_space = new DataStorageSpec.IntMebibytesBound(1024);
-        DatabaseDescriptor.setCommitLogWriteDiskAccessMode(Config.DiskAccessMode.direct); // Cassandra 4.x vs 5.x
         DatabaseDescriptor.setCommitLogSegmentMgrProvider((commitLog -> new CommitLogSegmentManagerCDC(commitLog, commitLogPath.toString())));
         setup = true;
     }

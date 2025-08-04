@@ -242,7 +242,9 @@ public class FourZeroCdcEventBuilder extends CdcEventBuilder
                 holder.add(makeValue(cell.buffer(), cell.column()));
                 if (cell.isExpiring())
                 {
-                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime())); // Cassandra 4.x vs 5.x
+                    // TODO: CASSANDRA-14227 Support unit interpretation,
+                    //  so that TTL does not overflow and become negative.
+                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime()));
                 }
             }
         }
@@ -272,7 +274,7 @@ public class FourZeroCdcEventBuilder extends CdcEventBuilder
                 buffer.addCell(cell);
                 if (cell.isExpiring())
                 {
-                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime())); // Cassandra 4.x vs 5.x
+                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime()));
                 }
             }
         }

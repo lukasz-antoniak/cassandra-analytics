@@ -61,6 +61,7 @@ import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataInputPlus;
+import org.apache.cassandra.io.util.DataInputStreamPlus;
 import org.apache.cassandra.io.util.RebufferingChannelInputStream;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.TableMetadata;
@@ -285,7 +286,7 @@ public final class ReaderUtils extends TokenUtils
                                                                          EnumSet<MetadataType> selectedTypes,
                                                                          Descriptor descriptor) throws IOException
     {
-        DataInputStream in = new DataInputStream(is); // Cassandra 4.x vs 5.x
+        DataInputStream in = new DataInputStreamPlus(is); // Cassandra 4.x vs 5.x
         boolean isChecksummed = descriptor.version.hasMetadataChecksum();
         CRC32 crc = new CRC32();
 

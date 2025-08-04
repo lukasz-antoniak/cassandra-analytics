@@ -87,8 +87,6 @@ public class CassandraTypesImplementation extends CassandraTypes
             DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
             Config config = new Config();
             config.memtable_flush_writers = 8;
-            config.memtable_heap_space = new DataStorageSpec.IntMebibytesBound(1024); // Cassandra 4.x vs 5.x
-            config.memtable_offheap_space = new DataStorageSpec.IntMebibytesBound(1024); // Cassandra 4.x vs 5.x
             config.diagnostic_events_enabled = false;
             config.max_mutation_size = new DataStorageSpec.IntKibibytesBound(config.commitlog_segment_size.toKibibytes() / 2);
             config.concurrent_compactors = 4;

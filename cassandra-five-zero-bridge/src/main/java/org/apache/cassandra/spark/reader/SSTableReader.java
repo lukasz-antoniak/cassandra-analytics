@@ -23,7 +23,6 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOError;
 import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -46,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.bridge.TokenRange;
+import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.DeletionTime;
@@ -63,6 +63,7 @@ import org.apache.cassandra.db.rows.UnfilteredRowIterator;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.SSTableSimpleIterator;
+import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.sstable.format.Version;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummary;
 import org.apache.cassandra.io.sstable.metadata.MetadataComponent;
@@ -70,7 +71,7 @@ import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.StatsMetadata;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
 import org.apache.cassandra.io.util.DataInputPlus;
-import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.io.util.DataInputStreamPlus;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.DroppedColumn;
 import org.apache.cassandra.schema.TableMetadata;
@@ -384,7 +385,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
 
         this.header = headerComp.toHeader(metadata);
         this.helper = new DeserializationHelper(metadata,
-                                                MessagingService.VERSION_30,
+                                                getSSTableVersion(ssTable).correspondingMessagingVersion(),
                                                 DeserializationHelper.Flag.FROM_REMOTE,
                                                 buildColumnFilter(metadata, columnFilter));
         this.metadata = metadata;
@@ -428,7 +429,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                                                            type,
                                                            ColumnMetadata.NO_POSITION,
                                                            kind,
-                                                           null); // Cassandra 4.x vs 5.x
+                                                           null); // TODO: Honor server-side column masking.
                 long droppedTime = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis())
                                  - TimeUnit.MINUTES.toMicros(60);
                 droppedColumns.put(entry.getKey(), new DroppedColumn(column, droppedTime));
@@ -849,11 +850,9 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         }
     }
 
-    private static class DataInputStreamPlus extends DataInputStream implements DataInputPlus
+    private Version getSSTableVersion(SSTable sstable)
     {
-        DataInputStreamPlus(InputStream is)
-        {
-            super(is);
-        }
+        SSTableFormat<?, ?> format = DatabaseDescriptor.getSSTableFormats().get(sstable.getFormat());
+        return format.getVersion(sstable.getVersion());
     }
 }
