@@ -25,8 +25,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import com.google.common.collect.ImmutableMap;
-
 import org.apache.cassandra.spark.data.FileType;
 
 import static java.util.Map.entry;
