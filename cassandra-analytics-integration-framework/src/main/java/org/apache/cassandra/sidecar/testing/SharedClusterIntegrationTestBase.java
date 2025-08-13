@@ -180,7 +180,7 @@ public abstract class SharedClusterIntegrationTestBase
         Optional<TestVersion> maybeTestVersion = TestVersionSupplier.testVersions().findFirst();
         assertThat(maybeTestVersion).isPresent();
         this.testVersion = maybeTestVersion.get();
-        logger.info("Testing with version={}", testVersion);
+        logger.info("Testing with Cassandra version={}", testVersion);
 
         classLoaderWrapper = new IsolatedDTestClassLoaderWrapper();
         classLoaderWrapper.initializeDTestJarClassLoader(testVersion, TestVersion.class);

@@ -80,7 +80,7 @@ commands:
       dtest:
         type: string
         default: "dtest-4.0.17.jar"
-      sidecar_versions_to_test:
+      cassandra_version:
         type: string
         default: "4.1"
     description: Build and integration test against Spark <<parameters.spark>> Scala <<parameters.scala>> <<parameters.jdk>>
@@ -94,7 +94,7 @@ commands:
             INTEGRATION_MAX_HEAP_SIZE: "2500M"
             CASSANDRA_USE_JDK11: <<parameters.use_jdk11>>
             DTEST_JAR: "<<parameters.dtest>>"
-            SIDECAR_VERSIONS_TO_TEST: "<<parameters.sidecar_versions_to_test>>"
+            CASSANDRA_VERSION: "<<parameters.cassandra_version>>"
           command: |
             # Run compile but not unit tests (which are run in run_build)
             ./gradlew --stacktrace clean assemble
@@ -269,7 +269,7 @@ jobs:
           jdk: "11"
           use_jdk11: "true"
           dtest: "dtest-5.0.3.jar"
-          sidecar_versions_to_test: "5.0"
+          cassandra_version: "5.0"
 
       - store_artifacts:
           path: build/test-reports

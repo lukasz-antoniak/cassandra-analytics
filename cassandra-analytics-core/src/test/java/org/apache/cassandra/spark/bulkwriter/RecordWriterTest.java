@@ -47,7 +47,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import org.apache.cassandra.bridge.CassandraVersion;
-import org.apache.cassandra.bridge.CassandraVersionFeatures;
 import org.apache.cassandra.spark.bulkwriter.token.ConsistencyLevel;
 import org.apache.cassandra.spark.bulkwriter.token.TokenRangeMapping;
 import org.apache.cassandra.spark.common.model.CassandraInstance;
@@ -78,12 +77,8 @@ class RecordWriterTest
 {
     private static final int REPLICA_COUNT = 3;
     private static final int FILES_PER_SSTABLE = 8;
-    // writing 270 rows with sstable size cap of 1 MB should produce 2 sstables (Cassandra 4) or 3 sstables (Cassandra 5)
-    private static final Map<Integer, Integer> UPLOADED_SSTABLES_PER_CASSANDRA_VERSION = ImmutableMap.<Integer, Integer>builder()
-                                                                                                     .put(40, 2)
-                                                                                                     .put(41, 2)
-                                                                                                     .put(50, 3)
-                                                                                                     .build();
+    // writing 270 rows with sstable size cap of 1 MB should produce 2 sstables
+    private static final int EXPECTED_NUMBER_OF_SSTABLES = 2;
     private static final int ROWS_COUNT = 270;
     private static final String[] COLUMN_NAMES = {
     "id", "date", "course", "marks"
@@ -222,7 +217,7 @@ class RecordWriterTest
         Map<CassandraInstance, List<UploadRequest>> uploads = writerContext.getUploads();
         assertThat(uploads.keySet().size()).isEqualTo(REPLICA_COUNT);  // Should upload to 3 replicas
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-        .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedUploadedSStables(version));
+        .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -300,7 +295,7 @@ class RecordWriterTest
         // Should upload to 3 replicas
         assertThat(uploads.keySet()).hasSize(REPLICA_COUNT);
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-            .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedUploadedSStables(version));
+            .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -333,7 +328,7 @@ class RecordWriterTest
         // Should upload to 3 replicas
         assertThat(uploads.keySet()).hasSize(REPLICA_COUNT);
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-                    .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedUploadedSStables(version));
+                    .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -440,7 +435,7 @@ class RecordWriterTest
         validateSuccessfulWrite(writerContext,
                                 data,
                                 columnNames,
-                                REPLICA_COUNT * FILES_PER_SSTABLE * expectedUploadedSStables(writerContext.getLowestCassandraVersion()),
+                                REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES,
                                 new CountDownLatch(0));
     }
 
@@ -556,12 +551,6 @@ class RecordWriterTest
         }
 
         return sortedData.iterator();
-    }
-
-    private static int expectedUploadedSStables(String version)
-    {
-        CassandraVersionFeatures cvf = CassandraVersionFeatures.cassandraVersionFeaturesFromCassandraVersion(version);
-        return UPLOADED_SSTABLES_PER_CASSANDRA_VERSION.get(cvf.getMajorVersion());
     }
 
     public static Iterable<Object[]> data()

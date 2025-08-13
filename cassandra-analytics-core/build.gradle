@@ -253,6 +253,7 @@ jacoco {
 }
 
 jacocoTestReport {
+    // collects the execution data from all test type tasks
     executionData tasks.withType(Test)
     reports {
         html.required = true

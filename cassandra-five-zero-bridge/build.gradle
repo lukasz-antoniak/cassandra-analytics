@@ -78,8 +78,10 @@ dependencies {
 
 jar {
     archiveFileName = "five-zero-bridge.jar"
-    dependsOn ':cassandra-five-zero-types:build' // trigger types build, so that dependent classes will be visible
-    dependsOn ':cassandra-four-zero-bridge:build'
+    // trigger types testClasses and/or jar, so that dependent classes will be visible
+    // note that it should not depend on 'build', which depends on 'test'
+    dependsOn ':cassandra-five-zero-types:testClasses'
+    dependsOn ':cassandra-four-zero-bridge:jar'
     // copy classes from V4 implementation and exclude duplicates that we override
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from { configurations.implCassV4.collect { it.isDirectory() ? it : zipTree(it) } }

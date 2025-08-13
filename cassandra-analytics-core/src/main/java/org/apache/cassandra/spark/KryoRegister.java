@@ -59,11 +59,9 @@ public class KryoRegister implements KryoRegistrator
     private static final String SPARK_REGISTRATORS = "spark.kryo.registrator";
     private static final Map<Class<?>, Serializer<?>> KRYO_SERIALIZERS = Collections.synchronizedMap(new LinkedHashMap<>());
 
-    public static final Map<CassandraVersion, Class<?>> KRYO_REGISTRATORS = ImmutableMap.<CassandraVersion, Class<?>>builder()
-                                                                                        .put(CassandraVersion.FOURZERO, V40.class)
-                                                                                        .put(CassandraVersion.FOURONE, V41.class)
-                                                                                        .put(CassandraVersion.FIVEZERO, V50.class)
-                                                                                        .build();
+    public static final Map<CassandraVersion, Class<?>> KRYO_REGISTRATORS = Map.of(CassandraVersion.FOURZERO, V40.class,
+                                                                                   CassandraVersion.FOURONE, V41.class,
+                                                                                   CassandraVersion.FIVEZERO, V50.class);
 
     static
     {
