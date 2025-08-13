@@ -268,7 +268,7 @@ jobs:
           scala: "2.13"
           jdk: "11"
           use_jdk11: "true"
-          dtest: "dtest-5.0.3.jar"
+          dtest: "dtest-5.0.5.jar"
           cassandra_version: "5.0"
 
       - store_artifacts:

@@ -72,7 +72,7 @@ public class TableSchemaTest
     private final String[] partitionKeyColumns = {"id"};
     private final String[] primaryKeyColumnNames = {"id", "date"};
     private final ColumnType<?>[] partitionKeyColumnTypes = {ColumnTypes.INT};
-    private final String cassandraVersion = "cassandra-5.0.3";
+    private final String cassandraVersion = "cassandra-5.0.5";
 
     @Test
     public void testInsertStatement()
