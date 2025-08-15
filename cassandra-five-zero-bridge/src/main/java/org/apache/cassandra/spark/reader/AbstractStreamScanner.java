@@ -436,7 +436,7 @@ public abstract class AbstractStreamScanner implements StreamScanner<RowData>, C
             // The complex data is live, but there could be element deletion inside; check for it later in the block
             if (deletionTime.isLive())
             {
-                ComplexTypeBuffer buffer = ComplexTypeBuffer.newBuffer(column.type, cellCount);
+                AbstractComplexTypeBuffer buffer = AbstractComplexTypeBuffer.newBuffer(column.type, cellCount);
                 long maxTimestamp = Long.MIN_VALUE;
                 while (cells.hasNext())
                 {

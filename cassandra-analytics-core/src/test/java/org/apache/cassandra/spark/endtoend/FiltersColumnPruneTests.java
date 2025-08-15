@@ -30,9 +30,7 @@ import org.apache.cassandra.spark.Tester;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.apache.spark.sql.Row;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @Tag("Sequential")
 public class FiltersColumnPruneTests
@@ -53,22 +51,22 @@ public class FiltersColumnPruneTests
               .withExpectedRowCountPerSSTable(Tester.DEFAULT_NUM_ROWS)
               .withCheck(dataset -> {
                   List<Row> rows = dataset.collectAsList();
-                  assertFalse(rows.isEmpty());
+                  assertThat(rows).isNotEmpty();
                   for (Row row : rows)
                   {
-                      assertTrue(row.schema().getFieldIndex("pk").isDefined());
-                      assertTrue(row.schema().getFieldIndex("ck").isDefined());
-                      assertTrue(row.schema().getFieldIndex("a").isDefined());
-                      assertFalse(row.schema().getFieldIndex("b").isDefined());
-                      assertTrue(row.schema().getFieldIndex("c").isDefined());
-                      assertFalse(row.schema().getFieldIndex("d").isDefined());
-                      assertTrue(row.schema().getFieldIndex("e").isDefined());
-                      assertEquals(5, row.length());
-                      assertTrue(row.get(0) instanceof String);
-                      assertTrue(row.get(1) instanceof Integer);
-                      assertTrue(row.get(2) instanceof Long);
-                      assertTrue(row.get(3) instanceof String);
-                      assertTrue(row.get(4) instanceof scala.collection.immutable.Map);
+                      assertThat(row.schema().getFieldIndex("pk").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("ck").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("a").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("b").isDefined()).isFalse();
+                      assertThat(row.schema().getFieldIndex("c").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("d").isDefined()).isFalse();
+                      assertThat(row.schema().getFieldIndex("e").isDefined()).isTrue();
+                      assertThat(row.length()).isEqualTo(5);
+                      assertThat(row.get(0)).isInstanceOf(String.class);
+                      assertThat(row.get(1)).isInstanceOf(Integer.class);
+                      assertThat(row.get(2)).isInstanceOf(Long.class);
+                      assertThat(row.get(3)).isInstanceOf(String.class);
+                      assertThat(row.get(4)).isInstanceOf(scala.collection.immutable.Map.class);
                   }
               })
               .run(bridge.getVersion());
@@ -91,22 +89,22 @@ public class FiltersColumnPruneTests
               .withExpectedRowCountPerSSTable(Tester.DEFAULT_NUM_ROWS)
               .withCheck(dataset -> {
                   List<Row> rows = dataset.collectAsList();
-                  assertFalse(rows.isEmpty());
+                  assertThat(rows).isNotEmpty();
                   for (Row row : rows)
                   {
-                      assertTrue(row.schema().getFieldIndex("pk").isDefined());
-                      assertTrue(row.schema().getFieldIndex("ck").isDefined());
-                      assertTrue(row.schema().getFieldIndex("a").isDefined());
-                      assertFalse(row.schema().getFieldIndex("b").isDefined());
-                      assertTrue(row.schema().getFieldIndex("c").isDefined());
-                      assertFalse(row.schema().getFieldIndex("d").isDefined());
-                      assertTrue(row.schema().getFieldIndex("e").isDefined());
-                      assertEquals(5, row.length());
-                      assertTrue(row.get(0) instanceof String);
-                      assertTrue(row.get(1) instanceof Integer);
-                      assertTrue(row.get(2) instanceof Long);
-                      assertTrue(row.get(3) instanceof String);
-                      assertTrue(row.get(4) instanceof scala.collection.immutable.Map);
+                      assertThat(row.schema().getFieldIndex("pk").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("ck").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("a").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("b").isDefined()).isFalse();
+                      assertThat(row.schema().getFieldIndex("c").isDefined()).isTrue();
+                      assertThat(row.schema().getFieldIndex("d").isDefined()).isFalse();
+                      assertThat(row.schema().getFieldIndex("e").isDefined()).isTrue();
+                      assertThat(row.length()).isEqualTo(5);
+                      assertThat(row.get(0)).isInstanceOf(String.class);
+                      assertThat(row.get(1)).isInstanceOf(Integer.class);
+                      assertThat(row.get(2)).isInstanceOf(Long.class);
+                      assertThat(row.get(3)).isInstanceOf(String.class);
+                      assertThat(row.get(4)).isInstanceOf(scala.collection.immutable.Map.class);
                   }
               })
               .run(bridge.getVersion());

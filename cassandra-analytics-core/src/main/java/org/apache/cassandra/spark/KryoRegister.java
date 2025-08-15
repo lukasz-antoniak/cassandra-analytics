@@ -107,6 +107,8 @@ public class KryoRegister implements KryoRegistrator
                                             .filter(string -> string != null && !string.isEmpty())
                                             .collect(Collectors.toSet());
 
+        // TODO: Find a better way to initialize Kryo serializer, instead of relaying
+        //  on Cassandra version specified as parameter of Spark job. Can we get Cassandra version from Sidecar?
         CassandraVersion cassandraVersion = BaseCassandraBridgeFactory.getCassandraVersion(configuration.get(CASSANDRA_VERSION, "4.0.0"));
         Class<?> registratorClass = KRYO_REGISTRATORS.get(cassandraVersion);
         if (registratorClass == null)

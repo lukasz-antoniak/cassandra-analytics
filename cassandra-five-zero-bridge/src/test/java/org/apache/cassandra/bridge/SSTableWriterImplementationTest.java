@@ -42,8 +42,7 @@ import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.spark.TestUtils;
 import org.apache.cassandra.utils.ReflectionUtils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for configuring {@link SSTableWriterImplementation}
@@ -73,8 +72,8 @@ class SSTableWriterImplementationTest
                                                                                         new Murmur3Partitioner());
 
 
-        assertTrue(peekSorted(builder));
-        assertEquals(250, peekBufferSizeInMB(builder));
+        assertThat(peekSorted(builder)).isTrue();
+        assertThat(peekBufferSizeInMB(builder)).isEqualTo(250);
     }
 
     @Test
@@ -88,31 +87,31 @@ class SSTableWriterImplementationTest
                                                                              Collections.emptySet(),
                                                                              1);
         writer.setSSTablesProducedListener(produced::addAll);
-        assertTrue(produced.isEmpty());
+        assertThat(produced.isEmpty()).isTrue();
 
         for (int i = 0; i < 300_000; i++)
         {
             writer.addRow(ImmutableMap.of("a", i, "b", "val_" + i));
         }
 
-        assertEquals(2, produced.size());
+        assertThat(produced.size()).isEqualTo(2);
         Set<SSTableDescriptor> expected = new HashSet<>(Arrays.asList(new SSTableDescriptor("oa-2-big"),
                                                                       new SSTableDescriptor("oa-3-big")));
-        assertEquals(expected, produced);
+        assertThat(produced).isEqualTo(expected);
         produced.clear();
 
         for (int i = 300_000; i < 400_000; i++)
         {
             writer.addRow(ImmutableMap.of("a", i, "b", "val_" + i));
         }
-        assertEquals(1, produced.size());
-        assertEquals(Collections.singleton(new SSTableDescriptor("oa-4-big")), produced);
+        assertThat(produced.size()).isEqualTo(1);
+        assertThat(produced).isEqualTo(Collections.singleton(new SSTableDescriptor("oa-4-big")));
 
         // when closing the writer, a new sstable is produced (by flushing the remaining data in the buffer)
         produced.clear();
         writer.close();
-        assertEquals(1, produced.size());
-        assertEquals(Collections.singleton(new SSTableDescriptor("oa-5-big")), produced);
+        assertThat(produced.size()).isEqualTo(1);
+        assertThat(produced).isEqualTo(Collections.singleton(new SSTableDescriptor("oa-5-big")));
     }
 
     @Test
@@ -121,7 +120,7 @@ class SSTableWriterImplementationTest
         org.apache.cassandra.io.util.File cf = new org.apache.cassandra.io.util.File(writeDirectory);
         SSTableId ssTableId = new SequenceBasedSSTableId(1);
         Descriptor descriptor = new Descriptor("nb", cf, "ks", "tbl", ssTableId, TestUtils.BIG_FORMAT);
-        assertEquals("nb-1-big", SSTableWriterImplementation.baseFilename(descriptor));
+        assertThat(SSTableWriterImplementation.baseFilename(descriptor)).isEqualTo("nb-1-big");
     }
 
     static boolean peekSorted(CQLSSTableWriter.Builder builder) throws NoSuchFieldException, IllegalAccessException

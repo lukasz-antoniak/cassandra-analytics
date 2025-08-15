@@ -19,24 +19,30 @@
 
 package org.apache.cassandra.spark.reader;
 
-import java.nio.ByteBuffer;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.SchemaTransformations;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.Types;
 
-import org.apache.cassandra.db.marshal.ByteBufferAccessor;
-import org.apache.cassandra.serializers.CollectionSerializer;
-
-/**
- * ComplexTypeBuffer is a util class for reconstructing multi-cell data into complex types such as unfrozen lists, maps, sets, or UDTs.
- * ComplexTypeBuffer buffers all the cell ByteBuffers then reconstructs as a single ByteBuffer.
- */
-public abstract class ComplexTypeBuffer extends AbstractComplexTypeBuffer
+public class SchemaUpdater
 {
-    public ComplexTypeBuffer(int cellCount, int bufferSize)
+    private SchemaUpdater()
     {
-        super(cellCount, bufferSize);
     }
 
-    public ByteBuffer pack()
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata)
     {
-        return CollectionSerializer.pack(buffers, ByteBufferAccessor.instance, elements());
+        schema.transform(SchemaTransformations.addKeyspace(keyspaceMetadata, false));
+    }
+
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, TableMetadata tableMetadata)
+    {
+        schema.transform(SchemaTransformations.addTable(tableMetadata, false));
+    }
+
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, Types userTypes)
+    {
+        schema.transform(SchemaTransformations.addTypes(userTypes, true));
     }
 }

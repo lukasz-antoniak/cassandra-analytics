@@ -17,24 +17,31 @@
  * under the License.
  */
 
-package org.apache.cassandra.spark.data.complex;
+package org.apache.cassandra.spark.reader;
 
-import java.nio.ByteBuffer;
+import org.apache.cassandra.schema.KeyspaceMetadata;
+import org.apache.cassandra.schema.Schema;
+import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.schema.Types;
 
-import org.apache.cassandra.db.rows.CellPath;
-import org.apache.cassandra.spark.data.CqlField;
-import org.apache.cassandra.utils.UUIDGen;
-
-public class CqlList extends AbstractCqlList
+public class SchemaUpdater
 {
-    public CqlList(CqlField.CqlType type)
+    private SchemaUpdater()
     {
-        super(type);
     }
 
-    @Override
-    protected CellPath randomCellPath()
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata)
     {
-        return CellPath.create(ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes()));
+        schema.load(keyspaceMetadata);
+    }
+
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, TableMetadata tableMetadata)
+    {
+        schema.load(keyspaceMetadata);
+    }
+
+    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, Types userTypes)
+    {
+        schema.load(keyspaceMetadata);
     }
 }

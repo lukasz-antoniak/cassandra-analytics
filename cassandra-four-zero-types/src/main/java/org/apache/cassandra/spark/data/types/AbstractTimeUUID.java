@@ -17,24 +17,36 @@
  * under the License.
  */
 
-package org.apache.cassandra.spark.data.complex;
+package org.apache.cassandra.spark.data.types;
 
-import java.nio.ByteBuffer;
-
-import org.apache.cassandra.db.rows.CellPath;
-import org.apache.cassandra.spark.data.CqlField;
+import org.apache.cassandra.cql3.functions.types.DataType;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.TimeUUIDType;
 import org.apache.cassandra.utils.UUIDGen;
 
-public class CqlList extends AbstractCqlList
+public abstract class AbstractTimeUUID extends UUID
 {
-    public CqlList(CqlField.CqlType type)
+    @Override
+    public String name()
     {
-        super(type);
+        return "timeuuid";
     }
 
     @Override
-    protected CellPath randomCellPath()
+    public AbstractType<?> dataType()
     {
-        return CellPath.create(ByteBuffer.wrap(UUIDGen.getTimeUUIDBytes()));
+        return TimeUUIDType.instance;
+    }
+
+    @Override
+    public Object randomValue(int minCollectionSize)
+    {
+        return UUIDGen.getTimeUUID();
+    }
+
+    @Override
+    public DataType driverDataType(boolean isFrozen)
+    {
+        return DataType.timeuuid();
     }
 }

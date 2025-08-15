@@ -63,10 +63,7 @@ import org.apache.cassandra.spark.utils.test.TestSchema;
 
 import static org.apache.cassandra.spark.TestUtils.BIG_FORMAT;
 import static org.apache.cassandra.spark.TestUtils.SSTABLE_FORMATS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.quicktheories.QuickTheory.qt;
@@ -97,7 +94,7 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     String dataFile = TestSSTable.firstIn(directory.path()).getDataFileName();
                     Descriptor descriptor = Descriptor.fromFile(
@@ -110,33 +107,33 @@ public class ReaderUtilsTests
                     {
                         componentMap = ReaderUtils.deserializeStatsMetadata(in, EnumSet.allOf(MetadataType.class), descriptor);
                     }
-                    assertNotNull(componentMap);
-                    assertFalse(componentMap.isEmpty());
+                    assertThat(componentMap).isNotNull();
+                    assertThat(componentMap.isEmpty()).isFalse();
 
                     ValidationMetadata validationMetadata = (ValidationMetadata) componentMap.get(MetadataType.VALIDATION);
-                    assertEquals("org.apache.cassandra.dht." + partitioner.name(), validationMetadata.partitioner);
+                    assertThat(validationMetadata.partitioner).isEqualTo("org.apache.cassandra.dht." + partitioner.name());
 
                     CompactionMetadata compactionMetadata = (CompactionMetadata) componentMap.get(MetadataType.COMPACTION);
-                    assertNotNull(compactionMetadata);
+                    assertThat(compactionMetadata).isNotNull();
 
                     StatsMetadata statsMetadata = (StatsMetadata) componentMap.get(MetadataType.STATS);
-                    assertEquals(ROWS * COLUMNS, statsMetadata.totalRows);
-                    assertEquals(0L, statsMetadata.repairedAt);
+                    assertThat(statsMetadata.totalRows).isEqualTo(ROWS * COLUMNS);
+                    assertThat(statsMetadata.repairedAt).isEqualTo(0L);
                     // Want to avoid test flakiness but timestamps should be in same ballpark
                     long tolerance = TimeUnit.MICROSECONDS.convert(10, TimeUnit.SECONDS);
-                    assertTrue(Math.abs(statsMetadata.maxTimestamp - nowMicros) < tolerance);
-                    assertTrue(Math.abs(statsMetadata.minTimestamp - nowMicros) < tolerance);
+                    assertThat(Math.abs(statsMetadata.maxTimestamp - nowMicros) < tolerance).isTrue();
+                    assertThat(Math.abs(statsMetadata.minTimestamp - nowMicros) < tolerance).isTrue();
 
                     SerializationHeader.Component header = (SerializationHeader.Component) componentMap.get(MetadataType.HEADER);
-                    assertNotNull(header);
-                    assertEquals("org.apache.cassandra.db.marshal.Int32Type", header.getKeyType().toString());
+                    assertThat(header).isNotNull();
+                    assertThat(header.getKeyType().toString()).isEqualTo("org.apache.cassandra.db.marshal.Int32Type");
                     List<AbstractType<?>> clusteringTypes = header.getClusteringTypes();
-                    assertEquals(1, clusteringTypes.size());
-                    assertEquals("org.apache.cassandra.db.marshal.Int32Type", clusteringTypes.get(0).toString());
-                    assertTrue(header.getStaticColumns().isEmpty());
+                    assertThat(clusteringTypes.size()).isEqualTo(1);
+                    assertThat(clusteringTypes.get(0).toString()).isEqualTo("org.apache.cassandra.db.marshal.Int32Type");
+                    assertThat(header.getStaticColumns().isEmpty()).isTrue();
                     List<AbstractType<?>> regulars = new ArrayList<>(header.getRegularColumns().values());
-                    assertEquals(1, regulars.size());
-                    assertEquals("org.apache.cassandra.db.marshal.Int32Type", regulars.get(0).toString());
+                    assertThat(regulars.size()).isEqualTo(1);
+                    assertThat(regulars.get(0).toString()).isEqualTo("org.apache.cassandra.db.marshal.Int32Type");
                 }
                 catch (IOException exception)
                 {
@@ -164,7 +161,7 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     // Read Summary.db file for first and last partition keys from Summary.db
                     Path summaryFile = TestSSTable.firstIn(directory.path(), FileType.SUMMARY);
@@ -173,9 +170,9 @@ public class ReaderUtilsTests
                     {
                         summaryKeys = SummaryDbUtils.readSummary(in, Murmur3Partitioner.instance, 128, 2048);
                     }
-                    assertNotNull(summaryKeys);
-                    assertNotNull(summaryKeys.first());
-                    assertNotNull(summaryKeys.last());
+                    assertThat(summaryKeys).isNotNull();
+                    assertThat(summaryKeys.first()).isNotNull();
+                    assertThat(summaryKeys.last()).isNotNull();
 
                     // Read Primary Index.db file for first and last partition keys from Summary.db
                     Path indexFile = TestSSTable.firstIn(directory.path(), FileType.INDEX);
@@ -186,9 +183,9 @@ public class ReaderUtilsTests
                         indexKeys = Pair.of(Murmur3Partitioner.instance.decorateKey(keys.left),
                                             Murmur3Partitioner.instance.decorateKey(keys.right));
                     }
-                    assertNotNull(indexKeys);
-                    assertEquals(indexKeys.left, summaryKeys.first());
-                    assertEquals(indexKeys.right, summaryKeys.last());
+                    assertThat(indexKeys).isNotNull();
+                    assertThat(indexKeys.left).isEqualTo(summaryKeys.first());
+                    assertThat(indexKeys.right).isEqualTo(summaryKeys.last());
                 }
                 catch (IOException exception)
                 {
@@ -216,7 +213,7 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     ByteBuffer key1 = Int32Type.instance.fromString("1");
                     BigInteger token1 = BRIDGE.hash(partitioner, key1);
@@ -246,8 +243,8 @@ public class ReaderUtilsTests
                                                                                               iPartitioner,
                                                                                               descriptor,
                                                                                               Collections.singletonList(keyInSSTable));
-                        assertEquals(1, filters.size());
-                        assertEquals(keyInSSTable, filters.get(0));
+                        assertThat(filters.size()).isEqualTo(1);
+                        assertThat(filters.get(0)).isEqualTo(keyInSSTable);
                     }
                 }
                 catch (IOException exception)
@@ -276,14 +273,14 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     Path indexFile = TestSSTable.firstIn(directory.path(), FileType.INDEX);
                     try (InputStream indexStream = new FileInputStream(indexFile.toString()))
                     {
                         SSTable ssTable = mock(SSTable.class);
                         when(ssTable.openPrimaryIndexStream()).thenReturn(indexStream);
-                        assertFalse(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.emptyList()));
+                        assertThat(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.emptyList())).isFalse();
                     }
                 }
                 catch (IOException exception)
@@ -312,7 +309,7 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     ByteBuffer key = Int32Type.instance.fromString("51");
                     BigInteger token = BRIDGE.hash(partitioner, key);
@@ -323,7 +320,7 @@ public class ReaderUtilsTests
                     {
                         SSTable ssTable = mock(SSTable.class);
                         when(ssTable.openPrimaryIndexStream()).thenReturn(indexStream);
-                        assertFalse(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.singletonList(keyNotInSSTable)));
+                        assertThat(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.singletonList(keyNotInSSTable))).isFalse();
                     }
                 }
                 catch (IOException exception)
@@ -352,7 +349,7 @@ public class ReaderUtilsTests
                             }
                         }
                     });
-                    assertEquals(1, TestSSTable.countIn(directory.path()));
+                    assertThat(TestSSTable.countIn(directory.path())).isEqualTo(1);
 
                     ByteBuffer key = Int32Type.instance.fromString("19");
                     BigInteger token = BRIDGE.hash(partitioner, key);
@@ -363,7 +360,7 @@ public class ReaderUtilsTests
                     {
                         SSTable ssTable = mock(SSTable.class);
                         when(ssTable.openPrimaryIndexStream()).thenReturn(indexStream);
-                        assertTrue(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.singletonList(keyInSSTable)));
+                        assertThat(ReaderUtils.anyFilterKeyInIndex(ssTable, Collections.singletonList(keyInSSTable))).isTrue();
                     }
                 }
                 catch (IOException exception)
