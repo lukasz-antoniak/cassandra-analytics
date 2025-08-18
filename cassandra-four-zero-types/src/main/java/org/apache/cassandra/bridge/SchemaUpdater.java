@@ -17,11 +17,10 @@
  * under the License.
  */
 
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.bridge;
 
 import org.apache.cassandra.schema.KeyspaceMetadata;
 import org.apache.cassandra.schema.Schema;
-import org.apache.cassandra.schema.SchemaTransformations;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.Types;
 
@@ -31,18 +30,23 @@ public class SchemaUpdater
     {
     }
 
-    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata)
+    public static void load(Schema schema, KeyspaceMetadata keyspaceMetadata)
     {
-        schema.transform(SchemaTransformations.addKeyspace(keyspaceMetadata, false));
+        schema.load(keyspaceMetadata);
     }
 
-    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, TableMetadata tableMetadata)
+    public static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, TableMetadata tableMetadata)
     {
-        schema.transform(SchemaTransformations.addTable(tableMetadata, false));
+        schema.load(keyspaceMetadata);
     }
 
-    static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, Types userTypes)
+    public static void load(Schema schema, KeyspaceMetadata keyspaceMetadata, Types userTypes)
     {
-        schema.transform(SchemaTransformations.addTypes(userTypes, true));
+        schema.load(keyspaceMetadata);
+    }
+
+    public static void updateTable(Schema schema, KeyspaceMetadata keyspaceMetadata, TableMetadata tableMetadata)
+    {
+        schema.load(keyspaceMetadata.withSwapped(keyspaceMetadata.tables.withSwapped(tableMetadata)));
     }
 }

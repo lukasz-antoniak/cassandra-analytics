@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import org.antlr.runtime.RecognitionException;
 import org.apache.cassandra.bridge.CassandraSchema;
 import org.apache.cassandra.bridge.CassandraTypesImplementation;
+import org.apache.cassandra.bridge.SchemaUpdater;
 import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.cql3.CQLFragmentParser;
 import org.apache.cassandra.cql3.CqlParser;

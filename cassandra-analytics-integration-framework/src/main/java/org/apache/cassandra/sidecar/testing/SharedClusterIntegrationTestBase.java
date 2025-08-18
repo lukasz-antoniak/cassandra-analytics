@@ -261,7 +261,7 @@ public abstract class SharedClusterIntegrationTestBase
     protected ClusterBuilderConfiguration testClusterConfiguration()
     {
         ClusterBuilderConfiguration conf = new ClusterBuilderConfiguration();
-        // TODO: Shall we read requested compatibility from sidecar?
+        // TODO: Shall we read requested compatibility from sidecar (CASSANALYTICS-24)?
         conf.additionalInstanceConfig(Map.of("storage_compatibility_mode", "NONE"));
         return conf;
     }
