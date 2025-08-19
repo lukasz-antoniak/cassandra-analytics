@@ -212,10 +212,11 @@ public final class CassandraSchema
     // maps keyspace -> set of table names
     public static Map<String, Set<String>> cdcEnabledTables(Schema schema)
     {
-        return Schema.instance.getKeyspaces()
-                              .stream()
-                              .collect(Collectors.toMap(Function.identity(),
-                                                        keyspace -> cdcEnabledTables(schema, keyspace)));
+        return new SchemaBridge(schema)
+               .getKeyspaces()
+               .stream()
+               .collect(Collectors.toMap(Function.identity(),
+                                         keyspace -> cdcEnabledTables(schema, keyspace)));
     }
 
     public static Set<String> cdcEnabledTables(Schema schema, String keyspace)
