@@ -116,7 +116,7 @@ class SSTableWriterImplementationTest
     void testBaseFileNameExtraction()
     {
         Descriptor descriptor = new Descriptor("nb", writeDirectory, "ks", "tbl", 1, SSTableFormat.Type.BIG);
-        assertThat(SSTableWriterImplementation.baseFilename(descriptor)).isEqualTo("nb-1-big");
+        assertThat(CassandraBridgeImplementation.baseFilename(descriptor)).isEqualTo("nb-1-big");
     }
 
     static boolean peekSorted(CQLSSTableWriter.Builder builder) throws NoSuchFieldException, IllegalAccessException

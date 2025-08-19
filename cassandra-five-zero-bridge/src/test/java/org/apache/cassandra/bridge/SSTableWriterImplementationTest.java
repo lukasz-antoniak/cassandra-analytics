@@ -120,7 +120,7 @@ class SSTableWriterImplementationTest
         org.apache.cassandra.io.util.File cf = new org.apache.cassandra.io.util.File(writeDirectory);
         SSTableId ssTableId = new SequenceBasedSSTableId(1);
         Descriptor descriptor = new Descriptor("nb", cf, "ks", "tbl", ssTableId, TestUtils.BIG_FORMAT);
-        assertThat(SSTableWriterImplementation.baseFilename(descriptor)).isEqualTo("nb-1-big");
+        assertThat(CassandraBridgeImplementation.baseFilename(descriptor)).isEqualTo("nb-1-big");
     }
 
     static boolean peekSorted(CQLSSTableWriter.Builder builder) throws NoSuchFieldException, IllegalAccessException
