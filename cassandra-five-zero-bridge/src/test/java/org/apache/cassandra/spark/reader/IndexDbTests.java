@@ -128,7 +128,7 @@ public class IndexDbTests
                                                            .filter(index -> index > 0 && index % sample == 0)
                                                            .mapToObj(tokens::get)
                                                            .collect(Collectors.toList());
-                    assertThat(sparseList.size()).isEqualTo((numRows / 4) - 1);
+                    assertThat(sparseList).hasSize((numRows / 4) - 1);
                     try (DataInputStream in = new DataInputStream(Objects.requireNonNull(ssTable.openPrimaryIndexStream())))
                     {
                         try
@@ -187,7 +187,7 @@ public class IndexDbTests
                                                                         iPartitioner,
                                                                         TokenRange.singleton(startRow.token),
                                                                         Stats.DoNothingStats.INSTANCE);
-                        assertThat(startOffset).isEqualTo(rows[startPos - 1].position);
+                        assertThat(rows[startPos - 1].position).isEqualTo(startOffset);
                         ReaderUtils.skipRowIndexEntry(in);
                     }
                     catch (IOException exception)

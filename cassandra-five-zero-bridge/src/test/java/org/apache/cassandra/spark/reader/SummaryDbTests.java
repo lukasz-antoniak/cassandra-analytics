@@ -128,7 +128,7 @@ public class SummaryDbTests
                         }
                         else
                         {
-                            assertThat(previous <= offset).isTrue();
+                            assertThat(previous).isLessThanOrEqualTo(offset);
                         }
                         previous = offset;
                     }

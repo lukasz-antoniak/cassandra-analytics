@@ -97,7 +97,7 @@ public class PartitionKeyTests
 
                 ByteBuffer buffer = BRIDGE.buildPartitionKey(table, Arrays.asList(Integer.toString(columnA), columnBString, columnC));
                 ByteBuffer[] buffers = compositeType.split(buffer);
-                assertThat(buffers).hasSize(3);
+                assertThat(buffers.length).isEqualTo(3);
 
                 assertThat(buffers[0].getInt()).isEqualTo(columnA);
                 assertThat(partitionKeyType.deserializeToJavaType(buffers[1])).isEqualTo(columnB);

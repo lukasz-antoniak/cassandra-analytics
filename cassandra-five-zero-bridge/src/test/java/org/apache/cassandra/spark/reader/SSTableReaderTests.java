@@ -123,7 +123,7 @@ public class SSTableReaderTests
                     Descriptor descriptor = Descriptor.fromFile(
                     new File(String.format("./%s/%s", schema.keyspace, schema.table), dataFile.getFileName().toString()));
                     long size = Files.size(dataFile);
-                    assertThat(size).isGreaterThan(0);
+                    assertThat(size).isPositive();
                     Path compressionFile = TestSSTable.firstIn(directory.path(), FileType.COMPRESSION_INFO);
                     long bytesRead = 0;
                     try (InputStream dis = new BufferedInputStream(Files.newInputStream(dataFile));
@@ -489,7 +489,7 @@ public class SSTableReaderTests
                     };
                     SSTableReader reader = openReader(metadata, dataFile, rangeFilter, false, stats);
                     int rows = countAndValidateRows(reader);
-                    assertThat(skipCount.get()).isGreaterThan(0);
+                    assertThat(skipCount.get()).isPositive();
                     assertThat(rows).isEqualTo((ROWS - skipCount.get()) * COLUMNS);  // Should skip out of range partitions here
                     assertThat(pass.get()).isTrue();
                 }
@@ -758,7 +758,7 @@ public class SSTableReaderTests
                     };
                     SSTableReader reader = openReader(metadata, dataFile, rangeFilter, partitionKeyFilters, false, stats);
                     int rows = countAndValidateRows(reader);
-                    assertThat(skipCount.get()).isGreaterThan(0);
+                    assertThat(skipCount.get()).isPositive();
                     assertThat(rows).isEqualTo(COLUMNS);
                     assertThat(rows).isEqualTo((ROWS - skipCount.get()) * COLUMNS);  // Should skip partitions not matching filters
                     assertThat(pass.get()).isTrue();
@@ -802,18 +802,18 @@ public class SSTableReaderTests
         Optional<TokenRange> range1 = SSTableReader.extractRange(
                 SparkRangeFilter.create(TokenRange.closed(BigInteger.valueOf(5L), BigInteger.valueOf(500L))),
                 Collections.emptyList());
-        assertThat(range1.isPresent()).isTrue();
+        assertThat(range1).isPresent();
         assertThat(range1.get().firstEnclosedValue()).isEqualTo(BigInteger.valueOf(5L));
         assertThat(range1.get().upperEndpoint()).isEqualTo(BigInteger.valueOf(500L));
 
         Optional<TokenRange> range2 = SSTableReader.extractRange(
                 SparkRangeFilter.create(TokenRange.closed(BigInteger.valueOf(-10000L), BigInteger.valueOf(29593L))),
                 Collections.emptyList());
-        assertThat(range2.isPresent()).isTrue();
+        assertThat(range2).isPresent();
         assertThat(range2.get().firstEnclosedValue()).isEqualTo(BigInteger.valueOf(-10000L));
         assertThat(range2.get().upperEndpoint()).isEqualTo(BigInteger.valueOf(29593L));
 
-        assertThat(SSTableReader.extractRange(null, Collections.emptyList()).isPresent()).isFalse();
+        assertThat(SSTableReader.extractRange(null, Collections.emptyList())).isNotPresent();
     }
 
     @Test
@@ -839,7 +839,7 @@ public class SSTableReaderTests
         assertThat(inRangePartitionKeyFilters.size()).isGreaterThan(1);
 
         Optional<TokenRange> range = SSTableReader.extractRange(sparkRangeFilter, inRangePartitionKeyFilters);
-        assertThat(range.isPresent()).isTrue();
+        assertThat(range).isPresent();
         assertThat(range.get()).isNotEqualTo(sparkRange);
         assertThat(sparkRange.lowerEndpoint().compareTo(range.get().lowerEndpoint())).isLessThan(0);
         assertThat(sparkRange.upperEndpoint().compareTo(range.get().upperEndpoint())).isGreaterThan(0);
@@ -1069,8 +1069,8 @@ public class SSTableReaderTests
                     }
                     assertThat(keys.size()).isEqualTo(1);
                     assertThat(keys.stream()
-                              .findFirst()
-                              .orElseThrow(() -> new RuntimeException("No partition keys returned")))
+                               .findFirst()
+                               .orElseThrow(() -> new RuntimeException("No partition keys returned")))
                             .isEqualTo(partitionKeyStr);
                 }
                 catch (IOException exception)

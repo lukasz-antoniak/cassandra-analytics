@@ -40,7 +40,7 @@ import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.SSTableId;
 import org.apache.cassandra.io.sstable.SequenceBasedSSTableId;
 import org.apache.cassandra.spark.TestUtils;
-import org.apache.cassandra.utils.ReflectionUtils;
+import org.apache.cassandra.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -87,17 +87,15 @@ class SSTableWriterImplementationTest
                                                                              Collections.emptySet(),
                                                                              1);
         writer.setSSTablesProducedListener(produced::addAll);
-        assertThat(produced.isEmpty()).isTrue();
+        assertThat(produced).isEmpty();
 
         for (int i = 0; i < 300_000; i++)
         {
             writer.addRow(ImmutableMap.of("a", i, "b", "val_" + i));
         }
 
-        assertThat(produced.size()).isEqualTo(2);
-        Set<SSTableDescriptor> expected = new HashSet<>(Arrays.asList(new SSTableDescriptor("oa-2-big"),
-                                                                      new SSTableDescriptor("oa-3-big")));
-        assertThat(produced).isEqualTo(expected);
+        assertThat(produced).hasSize(2);
+        assertThat(produced.stream().map(e -> e.baseFilename)).containsExactlyInAnyOrder("oa-2-big", "oa-3-big");
         produced.clear();
 
         for (int i = 300_000; i < 400_000; i++)

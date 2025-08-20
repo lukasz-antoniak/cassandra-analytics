@@ -149,7 +149,7 @@ public class IndexOffsetTests
                     }
 
                     // Verify we read each key exactly once across all Spark partitions
-                    assertThat(counts.length).isEqualTo(numKeys);
+                    assertThat(counts).hasSize(numKeys);
                     int index = 0;
                     for (int count : counts)
                     {
@@ -176,7 +176,7 @@ public class IndexOffsetTests
                                          partitioner.name());
                         }
                         assertThat(count).as(count > 0 ? "Key " + index + " read " + count + " times"
-                                                         : "Key not found: " + index).isEqualTo(1);
+                                                       : "Key not found: " + index).isEqualTo(1);
                         index++;
                     }
 

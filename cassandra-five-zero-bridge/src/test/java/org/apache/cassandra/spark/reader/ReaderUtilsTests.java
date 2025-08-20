@@ -184,8 +184,8 @@ public class ReaderUtilsTests
                                             Murmur3Partitioner.instance.decorateKey(keys.right));
                     }
                     assertThat(indexKeys).isNotNull();
-                    assertThat(indexKeys.left).isEqualTo(summaryKeys.first());
-                    assertThat(indexKeys.right).isEqualTo(summaryKeys.last());
+                    assertThat(summaryKeys.first()).isEqualTo(indexKeys.left);
+                    assertThat(summaryKeys.last()).isEqualTo(indexKeys.right);
                 }
                 catch (IOException exception)
                 {

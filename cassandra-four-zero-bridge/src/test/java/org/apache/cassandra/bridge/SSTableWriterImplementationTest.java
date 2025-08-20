@@ -38,7 +38,7 @@ import org.apache.cassandra.dht.Murmur3Partitioner;
 import org.apache.cassandra.io.sstable.CQLSSTableWriter;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
-import org.apache.cassandra.utils.ReflectionUtils;
+import org.apache.cassandra.util.ReflectionUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,9 +93,7 @@ class SSTableWriterImplementationTest
         }
 
         assertThat(produced).hasSize(2);
-        Set<SSTableDescriptor> expected = new HashSet<>(Arrays.asList(new SSTableDescriptor("nb-1-big"),
-                                                                      new SSTableDescriptor("nb-2-big")));
-        assertThat(produced).isEqualTo(expected);
+        assertThat(produced.stream().map(e -> e.baseFilename)).containsExactlyInAnyOrder("nb-1-big", "nb-2-big");
         produced.clear();
 
         for (int i = 300_000; i < 400_000; i++)

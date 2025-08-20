@@ -44,7 +44,7 @@ public class DateTypeTests
         int numDays = (int) sparkSqlDate;
         assertThat(numDays).isGreaterThan(0);
         LocalDate end = LocalDate.of(1970, 1, 1)
-                                       .plusDays(numDays);
+                                 .plusDays(numDays);
         assertThat(end.getYear()).isEqualTo(2021);
         assertThat(end.getMonthValue()).isEqualTo(7);
         assertThat(end.getDayOfMonth()).isEqualTo(16);
