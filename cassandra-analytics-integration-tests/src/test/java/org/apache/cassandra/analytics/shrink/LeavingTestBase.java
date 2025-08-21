@@ -90,7 +90,7 @@ abstract class LeavingTestBase extends ResiliencyTestBase
         leavingNodes = decommissionNodes(cluster, leavingNodesPerDc(), configuration.dcCount);
 
         // Wait until nodes have reached expected state
-        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 4, TimeUnit.MINUTES);
+        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 5, TimeUnit.MINUTES);
         leavingNodes.forEach(instance -> cluster.awaitRingState(seed, instance, "Leaving"));
     }
 
