@@ -77,12 +77,8 @@ commands:
       use_jdk11:
         type: string
         default: "false"
-      dtest:
+      cassandra:
         type: string
-        default: "dtest-4.0.17.jar"
-      cassandra_version:
-        type: string
-        default: "4.1"
     description: Build and integration test against Spark <<parameters.spark>> Scala <<parameters.scala>> <<parameters.jdk>>
     steps:
       - run:
@@ -93,9 +89,9 @@ commands:
             INTEGRATION_MAX_PARALLEL_FORKS: 1
             INTEGRATION_MAX_HEAP_SIZE: "2500M"
             CASSANDRA_USE_JDK11: <<parameters.use_jdk11>>
-            DTEST_JAR: "<<parameters.dtest>>"
-            CASSANDRA_VERSION: "<<parameters.cassandra_version>>"
           command: |
+            export DTEST_JAR="dtest-<< parameters.cassandra >>.jar"
+            export CASSANDRA_VERSION=$(echo << parameters.cassandra >> | cut -d'.' -f 1,2)
             # Run compile but not unit tests (which are run in run_build)
             ./gradlew --stacktrace clean assemble
             # Run integration tests in parallel
@@ -182,6 +178,7 @@ jobs:
           scala: "2.12"
           jdk: "11"
           use_jdk11: "true"
+          cassandra: "4.1.4"
 
       - store_artifacts:
           path: build/test-reports
@@ -240,6 +237,7 @@ jobs:
           scala: "2.13"
           jdk: "11"
           use_jdk11: "true"
+          cassandra: "4.1.4"
 
       - store_artifacts:
           path: build/test-reports
@@ -268,8 +266,7 @@ jobs:
           scala: "2.13"
           jdk: "11"
           use_jdk11: "true"
-          dtest: "dtest-5.0.5.jar"
-          cassandra_version: "5.0"
+          cassandra: "5.0.5"
 
       - store_artifacts:
           path: build/test-reports

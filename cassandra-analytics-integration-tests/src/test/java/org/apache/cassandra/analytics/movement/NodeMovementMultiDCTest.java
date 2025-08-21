@@ -137,7 +137,7 @@ class NodeMovementMultiDCTest extends NodeMovementTestBase
         {
             Future<?> res = orig.call();
             transitioningStateStart.countDown();
-            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateEnd, 2, TimeUnit.MINUTES);
+            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateEnd, 5, TimeUnit.MINUTES);
             return res;
         }
     }

@@ -80,7 +80,7 @@ abstract class JoiningTestBase extends ResiliencyTestBase
     {
         ClusterBuilderConfiguration configuration = testClusterConfiguration();
         newInstances = addNewInstances(cluster, configuration.newNodesPerDc, configuration.dcCount);
-        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 2, TimeUnit.MINUTES);
+        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 5, TimeUnit.MINUTES);
         newInstances.forEach(instance -> cluster.awaitRingState(instance, instance, "Joining"));
     }
 

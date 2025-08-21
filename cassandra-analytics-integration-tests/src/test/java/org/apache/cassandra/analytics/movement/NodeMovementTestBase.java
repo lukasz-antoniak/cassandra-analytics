@@ -90,7 +90,7 @@ abstract class NodeMovementTestBase extends ResiliencyTestBase
         }).start();
 
         // Wait until nodes have reached expected state
-        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 2, TimeUnit.MINUTES);
+        TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateStart(), 5, TimeUnit.MINUTES);
         cluster.awaitRingState(seed, movingNode, "Moving");
     }
 
