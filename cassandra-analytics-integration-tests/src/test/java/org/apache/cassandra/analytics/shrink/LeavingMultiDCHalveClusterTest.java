@@ -136,7 +136,7 @@ class LeavingMultiDCHalveClusterTest extends LeavingTestBase
         public static void unbootstrap(@SuperCall Callable<?> orig) throws Exception
         {
             transitionalStateStart.countDown();
-            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 5, TimeUnit.MINUTES);
+            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 4, TimeUnit.MINUTES);
             orig.call();
         }
     }

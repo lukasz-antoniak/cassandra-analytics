@@ -100,7 +100,7 @@ class JoiningDoubleClusterTest extends JoiningSingleNodeTest
             boolean result = orig.call();
             // trigger bootstrap start and wait until bootstrap is ready from test
             transitionalStateStart.countDown();
-            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 5, TimeUnit.MINUTES);
+            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 2, TimeUnit.MINUTES);
             return result;
         }
     }

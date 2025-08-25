@@ -134,7 +134,7 @@ class HostReplacementMultiDCFailureTest extends HostReplacementTestBase
             nodeStart.countDown();
             // trigger bootstrap start and wait until bootstrap is ready from test
             transitionalStateStart.countDown();
-            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 5, TimeUnit.MINUTES);
+            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitionalStateEnd, 2, TimeUnit.MINUTES);
             throw new UnsupportedOperationException("Simulated failure");
         }
     }

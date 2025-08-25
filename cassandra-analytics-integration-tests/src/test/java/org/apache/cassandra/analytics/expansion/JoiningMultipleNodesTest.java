@@ -99,7 +99,7 @@ class JoiningMultipleNodesTest extends JoiningSingleNodeTest
             boolean result = orig.call();
             // trigger bootstrap start and wait until bootstrap is ready from test
             transitioningStateStart.countDown();
-            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateEnd, 5, TimeUnit.MINUTES);
+            TestUninterruptibles.awaitUninterruptiblyOrThrow(transitioningStateEnd, 2, TimeUnit.MINUTES);
             return result;
         }
     }
