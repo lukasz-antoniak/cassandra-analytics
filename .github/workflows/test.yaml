@@ -121,14 +121,16 @@ jobs:
     strategy:
       matrix:
         scala: [ '2.12', '2.13' ]
-        cassandra: [ '4.1.4', '5.0.5' ]
+        cassandra: [ '4.0.17', '4.1.4', '5.0.5' ]
         job_index: [ 0, 1, 2, 3, 4 ]
         job_total: [ 5 ]
         exclude:
           - scala: "2.12"
             cassandra: "5.0.5"
-          - scala: "2.13"
+          - scala: "2.12"
             cassandra: "4.1.4"
+          - scala: "2.13"
+            cassandra: "4.0.17"
       fail-fast: false
     steps:
       - name: Setup JDK
