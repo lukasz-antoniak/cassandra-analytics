@@ -20,6 +20,8 @@
 package org.apache.cassandra.distributed.impl;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -70,6 +72,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
         return className.equals("org.apache.cassandra.utils.concurrent.Ref$OnLeak")
                || className.startsWith("org.apache.cassandra.metrics.RestorableMeter")
                || className.equals("org.apache.logging.slf4j.EventDataConverter")
+               || className.equals("org.apache.cassandra.cql3.functions.masking.ColumnMask")
                || (className.startsWith("org.apache.cassandra.analytics.") && className.contains("BBHelper"));
     };
 
@@ -92,6 +95,11 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
         Preconditions.checkArgument(newNodesPerDc >= 0, "newNodesPerDc cannot be a negative number");
         int originalNodeCount = nodesPerDc * dcCount;
         int finalNodeCount = dcCount * (nodesPerDc + newNodesPerDc);
+
+        if (requestedVersion.version.isLowerThan("4.1"))
+        {
+            updateCassandra40DTestSharedClasses();
+        }
 
         UpgradeableCluster.Builder clusterBuilder = UpgradeableCluster.build(originalNodeCount);
         clusterBuilder.withVersion(requestedVersion)
@@ -149,6 +157,27 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
             fixDistributedSchemas((AbstractCluster<I>) cluster);
         }
         return (AbstractCluster<I>) cluster;
+    }
+
+    /**
+     * CASSANDRA-16931 has not been backported to Cassandra 4.0, so we cannot
+     * configure shared classes. Applying a workaround with reflection.
+     */
+    private static void updateCassandra40DTestSharedClasses()
+    {
+        try
+        {
+            Field field = AbstractCluster.class.getDeclaredField("SHARED_PREDICATE");
+            field.setAccessible(true);
+            Field modifiersField = Field.class.getDeclaredField("modifiers");
+            modifiersField.setAccessible(true);
+            modifiersField.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+            field.set(null, ((Predicate<String>) field.get(null)).or(EXTRA));
+        }
+        catch (Exception e)
+        {
+            throw new IllegalStateException("Failed to adjust Cassandra 4.0 DTest shared classes", e);
+        }
     }
 
     // IClusterExtension methods

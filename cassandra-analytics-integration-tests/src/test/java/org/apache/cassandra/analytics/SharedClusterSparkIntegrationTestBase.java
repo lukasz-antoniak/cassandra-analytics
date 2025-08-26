@@ -38,6 +38,7 @@ import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraBridgeFactory;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.sidecar.testing.SharedClusterIntegrationTestBase;
+import org.apache.cassandra.testing.CassandraVersionRequirementExtension;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.DataFrameWriter;
@@ -56,6 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @TestInstance(Lifecycle.PER_CLASS)
 @ExtendWith(VertxExtension.class)
+@ExtendWith(CassandraVersionRequirementExtension.class)
 public abstract class SharedClusterSparkIntegrationTestBase extends SharedClusterIntegrationTestBase
 {
     protected SparkConf sparkConf;

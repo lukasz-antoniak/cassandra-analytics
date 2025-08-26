@@ -18,8 +18,10 @@
 
 package org.apache.cassandra.analytics;
 
+import org.apache.cassandra.testing.CassandraVersionRequirement;
 import org.apache.cassandra.testing.ClusterBuilderConfiguration;
 
+@CassandraVersionRequirement(minimum = "4.1", description = "Cassandra 4.0 DTest does not support v-nodes")
 public class CassandraAnalyticsSimpleMultipleTokensTest extends CassandraAnalyticsSimpleTest
 {
     @Override
