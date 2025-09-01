@@ -255,8 +255,11 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         {
             now = System.nanoTime();
             summary = SSTableCache.INSTANCE.keysFromSummary(metadata, ssTable);
-            stats.readSummaryDb(ssTable, System.nanoTime() - now);
-            keys = Pair.of(summary.first(), summary.last());
+            if (summary != null)
+            {
+                stats.readSummaryDb(ssTable, System.nanoTime() - now);
+                keys = Pair.of(summary.first(), summary.last());
+            }
         }
         catch (IOException exception)
         {
@@ -308,7 +311,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             this.partitionKeyFilters = ImmutableList.copyOf(matchInBloomFilter);
 
             // Check if required keys are actually present
-            if (matchInBloomFilter.isEmpty() || !ReaderUtils.anyFilterKeyInIndex(ssTable, matchInBloomFilter))
+            if (matchInBloomFilter.isEmpty() || !ReaderUtils.anyFilterKeyInIndex(ssTable, metadata, descriptor, matchInBloomFilter))
             {
                 if (matchInBloomFilter.isEmpty())
                 {

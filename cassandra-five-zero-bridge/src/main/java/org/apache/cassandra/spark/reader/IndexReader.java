@@ -48,6 +48,7 @@ import org.apache.cassandra.utils.vint.VIntCoding;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+// TODO: Rename to BigIndexReader.
 public class IndexReader implements IIndexReader
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(IndexReader.class);

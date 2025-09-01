@@ -254,7 +254,16 @@ public class IndexReaderTests
 
                     ssTables
                     .forEach(ssTable -> CompletableFuture.runAsync(
-                             () -> new IndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer), EXECUTOR)
+                             () -> {
+                                 if (ssTable.isBigFormat())
+                                 {
+                                     new IndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer);
+                                 }
+                                 else
+                                 {
+                                     new BtiIndexReader(ssTable, metaData, rangeFilter, Stats.DoNothingStats.INSTANCE, consumer);
+                                 }
+                             }, EXECUTOR)
                     );
 
                     try

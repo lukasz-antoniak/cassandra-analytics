@@ -56,15 +56,21 @@ import org.apache.cassandra.io.sstable.CorruptSSTableException;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.format.SSTableFormat;
 import org.apache.cassandra.io.sstable.format.Version;
+import org.apache.cassandra.io.sstable.format.bti.BtiReaderUtils;
+import org.apache.cassandra.io.sstable.format.bti.PartitionIndex;
 import org.apache.cassandra.io.sstable.metadata.MetadataComponent;
 import org.apache.cassandra.io.sstable.metadata.MetadataType;
 import org.apache.cassandra.io.sstable.metadata.ValidationMetadata;
+import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataInputStreamPlus;
 import org.apache.cassandra.io.util.RebufferingChannelInputStream;
 import org.apache.cassandra.io.util.File;
+import org.apache.cassandra.io.util.FileHandle;
+import org.apache.cassandra.io.util.ReadOnlyInputStreamFileChannel;
 import org.apache.cassandra.schema.TableMetadata;
+import org.apache.cassandra.spark.data.FileType;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.utils.ByteBufferUtils;
@@ -219,19 +225,42 @@ public final class ReaderUtils extends TokenUtils
         {
             if (primaryIndex != null)
             {
-                Pair<ByteBuffer, ByteBuffer> keys = primaryIndexReadFirstAndLastKey(primaryIndex);
-                return Pair.of(partitioner.decorateKey(keys.left), partitioner.decorateKey(keys.right));
+                if (ssTable.isBigFormat())
+                {
+                    Pair<ByteBuffer, ByteBuffer> keys = primaryIndexReadFirstAndLastKey(primaryIndex);
+                    return Pair.of(partitioner.decorateKey(keys.left), partitioner.decorateKey(keys.right));
+                }
+                else
+                {
+                    File file = new File(ssTable.getDataFileName());
+                    BufferingInputStream<?> bis = (BufferingInputStream<?>) primaryIndex;
+                    long size = ssTable.length(FileType.PARTITIONS_INDEX);
+                    try (ReadOnlyInputStreamFileChannel fileChannel = new ReadOnlyInputStreamFileChannel(bis, size);
+                         ChannelProxy proxy = new ChannelProxy(file, fileChannel);
+                         FileHandle fileHandle = new FileHandle.Builder(file).complete(f -> proxy);
+                         PartitionIndex partitionIndex = PartitionIndex.load(fileHandle, partitioner, false))
+                    {
+                        return Pair.of(partitionIndex.firstKey(), partitionIndex.lastKey());
+                    }
+                }
             }
         }
         return null;
     }
 
     public static boolean anyFilterKeyInIndex(@NotNull SSTable ssTable,
+                                              @NotNull TableMetadata metadata,
+                                              @NotNull Descriptor descriptor,
                                               @NotNull List<PartitionKeyFilter> filters) throws IOException
     {
         if (filters.isEmpty())
         {
             return false;
+        }
+
+        if (ssTable.isBtiFormat())
+        {
+            return BtiReaderUtils.primaryIndexContainsAnyKey(ssTable, metadata, descriptor, filters);
         }
 
         try (InputStream primaryIndex = ssTable.openPrimaryIndexStream())
