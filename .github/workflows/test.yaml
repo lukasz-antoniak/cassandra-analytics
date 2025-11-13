@@ -174,11 +174,23 @@ jobs:
           cd ../../../..
           
           EXIT_STATUS=0
+          C40_EXCLUSIONS=("org.apache.cassandra.analytics.BulkWriteDownInstanceMultipleTokensTest" "org.apache.cassandra.analytics.BulkWriteDownSidecarMultipleTokensTest" "org.apache.cassandra.analytics.CassandraAnalyticsSimpleMultipleTokensTest" "org.apache.cassandra.analytics.testcontainer.BulkWriteS3CompatModeSimpleMultipleTokensTest")
           for TEST_NAME in $CLASSNAMES; do
-            echo Executing test $TEST_NAME
-            
-            ./gradlew --stacktrace cassandra-analytics-integration-tests:test --tests $TEST_NAME --no-daemon || EXIT_STATUS=$?;
-            
+            SKIP="false"
+            for C40_EXCLUSION in "${C40_EXCLUSIONS[@]}";
+            do
+              if [[ "$CASSANDRA_VERSION" == "4.0" && "$TEST_NAME" == ${C40_EXCLUSION} ]]; then
+                SKIP="true"
+                break
+              fi
+            done
+            if [ $SKIP == "false" ]; then
+              echo Executing test $TEST_NAME
+              ./gradlew --stacktrace cassandra-analytics-integration-tests:test --tests $TEST_NAME --no-daemon || EXIT_STATUS=$?;
+            else
+              echo "Skipping Cassandra 4.0 test $TEST_NAME"
+            fi
+
             test_id=$(date +%H%M%S)
             mkdir -p test-reports/$test_id
             mv build/test-reports/* test-reports/$test_id

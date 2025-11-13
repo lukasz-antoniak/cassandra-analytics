@@ -18,10 +18,12 @@
 
 package org.apache.cassandra.analytics;
 
-import org.apache.cassandra.testing.CassandraVersionRequirement;
+import com.vdurmont.semver4j.Semver;
 import org.apache.cassandra.testing.ClusterBuilderConfiguration;
+import org.apache.cassandra.testing.TestUtils;
 
-@CassandraVersionRequirement(minimum = "4.1", description = "Cassandra 4.0 DTest does not support v-nodes")
+import static org.assertj.core.api.Assumptions.assumeThat;
+
 public class BulkWriteDownSidecarMultipleTokensTest extends BulkWriteDownSidecarTest
 {
     @Override
@@ -29,5 +31,13 @@ public class BulkWriteDownSidecarMultipleTokensTest extends BulkWriteDownSidecar
     {
         return super.testClusterConfiguration()
                     .tokenCount(4);
+    }
+
+    @Override
+    protected void beforeClusterProvisioning()
+    {
+        assumeThat(TestUtils.getDTestClusterVersion().isGreaterThanOrEqualTo(new Semver("4.1", Semver.SemverType.LOOSE)))
+        .describedAs("Cassandra 4.0 DTest does not support v-nodes")
+        .isTrue();
     }
 }

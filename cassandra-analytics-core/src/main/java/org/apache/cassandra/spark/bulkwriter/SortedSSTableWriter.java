@@ -30,8 +30,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -77,7 +75,7 @@ public class SortedSSTableWriter
     private final int partitionId;
     private BigInteger minToken = null;
     private BigInteger maxToken = null;
-    private final ConcurrentMap<Path, Digest> overallFileDigests = new ConcurrentHashMap<>();
+    private final Map<Path, Digest> overallFileDigests = new HashMap<>();
     private final DigestAlgorithm digestAlgorithm;
 
     private volatile boolean isClosed = false;
@@ -172,7 +170,7 @@ public class SortedSSTableWriter
         return sstableCount;
     }
 
-    public Map<Path, Digest> prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
+    public synchronized Map<Path, Digest> prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
     {
         DirectoryStream.Filter<Path> sstableFilter = path -> {
             SSTableDescriptor baseName = SSTables.getSSTableDescriptor(path);
@@ -201,7 +199,7 @@ public class SortedSSTableWriter
         return fileDigests;
     }
 
-    public void close(BulkWriterContext writerContext) throws IOException
+    public synchronized void close(BulkWriterContext writerContext) throws IOException
     {
         if (isClosed)
         {
@@ -337,10 +335,5 @@ public class SortedSSTableWriter
     public Map<Path, Digest> fileDigestMap()
     {
         return Collections.unmodifiableMap(overallFileDigests);
-    }
-
-    public boolean isClosed()
-    {
-        return isClosed;
     }
 }
