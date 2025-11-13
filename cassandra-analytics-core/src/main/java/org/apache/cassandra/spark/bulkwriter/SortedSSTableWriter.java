@@ -30,6 +30,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -75,7 +77,7 @@ public class SortedSSTableWriter
     private final int partitionId;
     private BigInteger minToken = null;
     private BigInteger maxToken = null;
-    private final Map<Path, Digest> overallFileDigests = new HashMap<>();
+    private final ConcurrentMap<Path, Digest> overallFileDigests = new ConcurrentHashMap<>();
     private final DigestAlgorithm digestAlgorithm;
 
     private volatile boolean isClosed = false;
@@ -208,6 +210,7 @@ public class SortedSSTableWriter
         }
         isClosed = true;
         cqlSSTableWriter.close();
+        Map<Path, Digest> lastFileDigests = new HashMap<>();
         for (Path dataFile : getDataFileStream())
         {
             // NOTE: We calculate file hashes before re-reading so that we know what we hashed
@@ -222,10 +225,12 @@ public class SortedSSTableWriter
             if (!alreadyHashed)
             {
                 overallFileDigests.putAll(calculateFileDigestMap(dataFile));
+                lastFileDigests.putAll(calculateFileDigestMap(dataFile));
             }
             sstableCount += 1;
         }
-        bytesWritten += calculatedTotalSize(overallFileDigests.keySet());
+        // some previous uploaded files might have been removed by StreamSession#onSSTablesProduced
+        bytesWritten += calculatedTotalSize(lastFileDigests.keySet());
         validateSSTables(writerContext);
     }
 
@@ -332,5 +337,10 @@ public class SortedSSTableWriter
     public Map<Path, Digest> fileDigestMap()
     {
         return Collections.unmodifiableMap(overallFileDigests);
+    }
+
+    public boolean isClosed()
+    {
+        return isClosed;
     }
 }

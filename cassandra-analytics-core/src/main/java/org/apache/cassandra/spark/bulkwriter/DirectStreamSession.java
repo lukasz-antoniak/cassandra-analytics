@@ -97,17 +97,21 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
                            });
 
                 LOGGER.info("[{}]: Sent newly produced SSTables. sstables={}", sessionID, sstableCounter.value);
-                LOGGER.info("[{}]: Removing temporary files after streaming. files={}", sessionID, fileDigests);
-                fileDigests.keySet().forEach(path -> {
-                    try
-                    {
-                        Files.deleteIfExists(path);
-                    }
-                    catch (IOException e)
-                    {
-                        LOGGER.warn("[{}]: Failed to delete temporary file. file={}", sessionID, path);
-                    }
-                });
+                if (!sstableWriter.isClosed())
+                {
+                    // remaining files will be removed by sendRemainingSSTables()
+                    LOGGER.info("[{}]: Removing temporary files after streaming. files={}", sessionID, fileDigests);
+                    fileDigests.keySet().forEach(path -> {
+                        try
+                        {
+                            Files.deleteIfExists(path);
+                        }
+                        catch (IOException e)
+                        {
+                            LOGGER.warn("[{}]: Failed to delete temporary file. file={}", sessionID, path);
+                        }
+                    });
+                }
             }
             catch (IOException e)
             {
