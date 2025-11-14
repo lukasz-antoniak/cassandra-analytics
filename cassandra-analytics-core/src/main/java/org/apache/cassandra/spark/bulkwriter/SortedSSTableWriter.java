@@ -170,7 +170,7 @@ public class SortedSSTableWriter
         return sstableCount;
     }
 
-    public Map<Path, Digest> prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
+    public synchronized Map<Path, Digest> prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
     {
         DirectoryStream.Filter<Path> sstableFilter = path -> {
             SSTableDescriptor baseName = SSTables.getSSTableDescriptor(path);
@@ -199,7 +199,7 @@ public class SortedSSTableWriter
         return fileDigests;
     }
 
-    public void close(BulkWriterContext writerContext) throws IOException
+    public synchronized void close(BulkWriterContext writerContext) throws IOException
     {
         if (isClosed)
         {
@@ -208,6 +208,7 @@ public class SortedSSTableWriter
         }
         isClosed = true;
         cqlSSTableWriter.close();
+        Map<Path, Digest> lastFileDigests = new HashMap<>();
         for (Path dataFile : getDataFileStream())
         {
             // NOTE: We calculate file hashes before re-reading so that we know what we hashed
@@ -222,10 +223,12 @@ public class SortedSSTableWriter
             if (!alreadyHashed)
             {
                 overallFileDigests.putAll(calculateFileDigestMap(dataFile));
+                lastFileDigests.putAll(calculateFileDigestMap(dataFile));
             }
             sstableCount += 1;
         }
-        bytesWritten += calculatedTotalSize(overallFileDigests.keySet());
+        // some previous uploaded files might have been removed by StreamSession#onSSTablesProduced
+        bytesWritten += calculatedTotalSize(lastFileDigests.keySet());
         validateSSTables(writerContext);
     }
 
