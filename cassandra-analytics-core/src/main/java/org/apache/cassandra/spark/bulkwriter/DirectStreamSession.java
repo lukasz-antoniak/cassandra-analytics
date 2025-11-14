@@ -97,7 +97,6 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
                            });
 
                 LOGGER.info("[{}]: Sent newly produced SSTables. sstables={}", sessionID, sstableCounter.value);
-                // remaining files will be removed by sendRemainingSSTables()
                 LOGGER.info("[{}]: Removing temporary files after streaming. files={}", sessionID, fileDigests);
                 fileDigests.keySet().forEach(path -> {
                     try

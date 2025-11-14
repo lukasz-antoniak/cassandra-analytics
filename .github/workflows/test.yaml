@@ -174,7 +174,10 @@ jobs:
           cd ../../../..
           
           EXIT_STATUS=0
-          C40_EXCLUSIONS=("org.apache.cassandra.analytics.BulkWriteDownInstanceMultipleTokensTest" "org.apache.cassandra.analytics.BulkWriteDownSidecarMultipleTokensTest" "org.apache.cassandra.analytics.CassandraAnalyticsSimpleMultipleTokensTest" "org.apache.cassandra.analytics.testcontainer.BulkWriteS3CompatModeSimpleMultipleTokensTest")
+          # Execution of "gradle test --test $TEST_NAME" returns non-zero exit code when commend did not run any test
+          # (e.g. when all tests are ignored). Currently there is no option to change Gradle behaviour.
+          # Workaround the issue by explicitly skipping test classes that cannot be executed on Cassandra 4.0.
+          C40_EXCLUSIONS=("org.apache.cassandra.analytics.BulkWriteDownInstanceMultipleTokensTest" "org.apache.cassandra.analytics.BulkWriteDownSidecarMultipleTokensTest" "org.apache.cassandra.analytics.CassandraAnalyticsSimpleMultipleTokensTest" "org.apache.cassandra.analytics.RandomPartitionerTest" "org.apache.cassandra.analytics.testcontainer.BulkWriteS3CompatModeSimpleMultipleTokensTest" "org.apache.cassandra.analytics.data.ClearSnapshotTest")
           for TEST_NAME in $CLASSNAMES; do
             SKIP="false"
             for C40_EXCLUSION in "${C40_EXCLUSIONS[@]}";
@@ -193,7 +196,7 @@ jobs:
               ./gradlew --stacktrace cassandra-analytics-integration-tests:test --tests $TEST_NAME --no-daemon || EXIT_STATUS=$?;
               mv build/test-reports/* test-reports/$test_id
             else
-              echo "Skipping Cassandra 4.0 test $TEST_NAME"
+              echo "Skipping test $TEST_NAME"
             fi
           done;
           
