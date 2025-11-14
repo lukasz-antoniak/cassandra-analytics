@@ -184,16 +184,17 @@ jobs:
                 break
               fi
             done
-            if [ $SKIP == "false" ]; then
-              echo Executing test $TEST_NAME
-              ./gradlew --stacktrace cassandra-analytics-integration-tests:test --tests $TEST_NAME --no-daemon || EXIT_STATUS=$?;
-            else
-              echo "Skipping Cassandra 4.0 test $TEST_NAME"
-            fi
 
             test_id=$(date +%H%M%S)
             mkdir -p test-reports/$test_id
-            mv build/test-reports/* test-reports/$test_id
+
+            if [ $SKIP == "false" ]; then
+              echo Executing test $TEST_NAME
+              ./gradlew --stacktrace cassandra-analytics-integration-tests:test --tests $TEST_NAME --no-daemon || EXIT_STATUS=$?;
+              mv build/test-reports/* test-reports/$test_id
+            else
+              echo "Skipping Cassandra 4.0 test $TEST_NAME"
+            fi
           done;
           
           tar czf integration-tests.tar.gz test-reports/*
