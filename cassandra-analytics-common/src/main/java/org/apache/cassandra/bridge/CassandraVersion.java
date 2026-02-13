@@ -78,14 +78,14 @@ public enum CassandraVersion
         sstableFormat = System.getProperty("cassandra.analytics.bridges.sstable_format", "big");
 
         String providedVersionsOrDefault = System.getProperty("cassandra.analytics.bridges.implemented_versions",
-                                                              String.join(",", FOURZERO.name(), FIVEZERO.name()));
+                                                              String.join(",", FOURZERO.name(), FIVEZERO.name(), FIVEONE.name()));
         implementedVersions = Arrays.stream(providedVersionsOrDefault.split(","))
                                     .map(CassandraVersion::valueOf)
                                     .filter(v -> v.sstableFormats.contains(sstableFormat))
                                     .toArray(CassandraVersion[]::new);
 
         String providedSupportedVersionsOrDefault = System.getProperty("cassandra.analytics.bridges.supported_versions",
-                                                                       "cassandra-4.0.17,cassandra-5.0.5");
+                                                                       "cassandra-4.0.17,cassandra-5.0.5,cassandra-5.1.0");
         supportedVersions = Arrays.stream(providedSupportedVersionsOrDefault.split(","))
                                   .filter(version -> CassandraVersion.fromVersion(version)
                                                                      .filter(v -> v.sstableFormats.contains(sstableFormat))

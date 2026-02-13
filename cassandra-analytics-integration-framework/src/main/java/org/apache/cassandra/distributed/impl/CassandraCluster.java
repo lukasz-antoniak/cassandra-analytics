@@ -96,7 +96,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
 
         UpgradeableCluster.Builder clusterBuilder = UpgradeableCluster.build(originalNodeCount);
         clusterBuilder.withVersion(requestedVersion)
-                      .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
+                      // .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
                       .withSharedClasses(EXTRA.or(clusterBuilder.getSharedClasses()))
                       .withDCs(dcCount)
                       .withTokenCount(configuration.tokenCount)
@@ -324,6 +324,12 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
     public void checkAndResetUncaughtExceptions()
     {
         delegate.checkAndResetUncaughtExceptions();
+    }
+
+    @Override // introduce in 5.1
+    public InstanceConfig createInstanceConfig(int nodeNum)
+    {
+        return delegate.createInstanceConfig(nodeNum);
     }
 
     @Override

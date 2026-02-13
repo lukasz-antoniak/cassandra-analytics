@@ -98,10 +98,9 @@ dependencies {
     fivezeroSparkSql(project(path: ':cassandra-analytics-spark-five-zero-converter'))
 
     fiveone(project(path: ':cassandra-five-one', configuration: 'shadow'))
-    // below dependencies are copied, so on purpose reference five-zero modules
-    fiveoneBridge(project(path: ':cassandra-five-zero-bridge'))
-    fiveoneTypes(project(path: ':cassandra-five-zero-types'))
-    fiveoneSparkSql(project(path: ':cassandra-analytics-spark-five-zero-converter'))
+    fiveoneBridge(project(path: ':cassandra-five-one-bridge'))
+    fiveoneTypes(project(path: ':cassandra-five-one-types'))
+    fiveoneSparkSql(project(path: ':cassandra-analytics-spark-five-one-converter'))
 
     api(project(':cassandra-analytics-spark-converter'))
 
@@ -158,20 +157,13 @@ jar {
     dependsOn(configurations.fivezeroTypes)
 
     dependsOn(configurations.fiveone)
+    dependsOn(configurations.fiveoneBridge)
+    dependsOn(configurations.fiveoneSparkSql)
+    dependsOn(configurations.fiveoneTypes)
 
     writeBuildVersion(version, project.projectDir)
 
     exclude('META-INF/*')
-
-    into('bridges') {
-        from(configurations.fiveone.singleFile)
-        from(configurations.fiveoneBridge.singleFile)
-        rename 'five-zero-bridge.jar', 'five-one-bridge.jar'
-        from(configurations.fiveoneTypes.singleFile)
-        rename 'five-zero-types.jar', 'five-one-types.jar'
-        from(configurations.fiveoneSparkSql.singleFile)
-        rename 'five-zero-sparksql.jar', 'five-one-sparksql.jar'
-    }
 
     into('bridges') {
         from(configurations.fourzero.singleFile)
@@ -183,6 +175,11 @@ jar {
         from(configurations.fivezeroBridge.singleFile)
         from(configurations.fivezeroTypes.singleFile)
         from(configurations.fivezeroSparkSql.singleFile)
+
+        from(configurations.fiveone.singleFile)
+        from(configurations.fiveoneBridge.singleFile)
+        from(configurations.fiveoneTypes.singleFile)
+        from(configurations.fiveoneSparkSql.singleFile)
     }
 }
 
