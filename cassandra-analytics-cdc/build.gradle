@@ -60,6 +60,8 @@ configurations {
     fivezeroAvroConverter {
         description = 'Avro converter for Cassandra 5.0 Data Types'
     }
+
+    // TODO(lantoniak): Put 5.1 modules also here.
 }
 
 dependencies {

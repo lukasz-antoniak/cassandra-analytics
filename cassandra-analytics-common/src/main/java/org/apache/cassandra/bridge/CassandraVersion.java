@@ -38,7 +38,8 @@ public enum CassandraVersion
     THREEZERO(30, "3.0", "three-zero", "big"),
     FOURZERO(40, "4.0", "four-zero", "big"),
     FOURONE(41, "4.1", "four-zero", "big"),
-    FIVEZERO(50, "5.0", "five-zero", "big", "bti");
+    FIVEZERO(50, "5.0", "five-zero", "big", "bti"),
+    FIVEONE(51, "5.1", "five-one", "big", "bti");
 
     private final int number;
     private final String name;
