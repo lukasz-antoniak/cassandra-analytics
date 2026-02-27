@@ -31,7 +31,7 @@ import org.apache.cassandra.db.rows.RangeTombstoneMarker;
 import org.apache.cassandra.schema.ColumnMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 
-public class FourZeroRangeTombstoneBuilder extends RangeTombstoneBuilder<RangeTombstoneMarker>
+public class FourZeroRangeTombstoneBuilder extends AbstractRangeTombstoneBuilder<RangeTombstoneMarker>
 {
     private final TableMetadata tableMetadata;
     private RangeTombstoneMarker rangeTombstoneMarker;

@@ -21,7 +21,6 @@ package org.apache.cassandra.cdc;
 
 import org.junit.jupiter.api.Test;
 
-import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.spark.data.CassandraTypes;
 import org.apache.cassandra.spark.data.CqlField;
 
@@ -33,7 +32,7 @@ public class TypeCacheTests
     @Test
     public void testTypeCache()
     {
-        TypeCache typeCache = TypeCache.get(CassandraVersion.FOURZERO);
+        TypeCache typeCache = TypeCache.get(TestVersionSupplier.testVersion());
         assertThat(typeCache.cqlTypeCache).isNull();
 
         CqlField.CqlType ksBigInt = typeCache.getType("ks", "bigint");

@@ -20,6 +20,7 @@
 package org.apache.cassandra.cdc;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +34,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.junit.jupiter.api.Test;
 
-import org.apache.cassandra.bridge.CassandraVersion;
-import org.apache.cassandra.bridge.CollectionElement;
 import org.apache.cassandra.cdc.api.CassandraSource;
 import org.apache.cassandra.cdc.api.RangeTombstoneData;
 import org.apache.cassandra.cdc.msg.CdcEvent;
@@ -43,11 +42,10 @@ import org.apache.cassandra.cdc.msg.jdk.CdcMessage;
 import org.apache.cassandra.cdc.msg.jdk.Column;
 import org.apache.cassandra.cdc.msg.jdk.RangeTombstoneMsg;
 import org.apache.cassandra.cdc.state.CdcState;
-import org.apache.cassandra.db.rows.CellPath;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.data.CqlTable;
+import org.apache.cassandra.spark.data.ReplicationFactor;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
-import org.apache.cassandra.spark.reader.SchemaBuilder;
 import org.apache.cassandra.spark.utils.RandomUtils;
 import org.apache.cassandra.spark.utils.TimeProvider;
 import org.apache.cassandra.spark.utils.test.TestSchema;
@@ -81,7 +79,7 @@ public class MicroBatchIteratorTests
             TestSchema.TestRow testRow = CdcTester.newUniqueRow(schema, rows);
             String deletedValue = (String) BRIDGE.text().randomValue(4);
             ByteBuffer key = BRIDGE.text().serialize(deletedValue);
-            testRow = testRow.copy("b", CollectionElement.deleted(CellPath.create(key)));
+            testRow = testRow.copy("b", TestUtils.collectionDeleteMutation(TestVersionSupplier.testVersion(), key));
             deletedValues.put(testRow.get(0).toString(), deletedValue);
             return testRow;
         },
@@ -106,7 +104,7 @@ public class MicroBatchIteratorTests
                     TestSchema.TestRow testRow = CdcTester.newUniqueRow(schema, rows);
                     String deletedValue = (String) BRIDGE.text().randomValue(4);
                     ByteBuffer key = BRIDGE.text().serialize(deletedValue);
-                    testRow = testRow.copy("b", CollectionElement.deleted(CellPath.create(key)));
+                    testRow = testRow.copy("b", TestUtils.collectionDeleteMutation(TestVersionSupplier.testVersion(), key));
                     deletedValues.put(testRow.get(0).toString(), deletedValue);
                     return testRow;
                 },
@@ -368,8 +366,13 @@ public class MicroBatchIteratorTests
                             .withCdc(true)
                             .build();
         CqlTable cqlTable = schema.buildTable();
-        new SchemaBuilder(cqlTable, Partitioner.Murmur3Partitioner, schema.withCdc);
-        schema.setCassandraVersion(CassandraVersion.FOURZERO);
+        BRIDGE.buildSchema(cqlTable.createStatement(),
+                           cqlTable.keyspace(),
+                           ReplicationFactor.simpleStrategy(1),
+                           Partitioner.Murmur3Partitioner,
+                           Collections.emptySet(),
+                           null, 0, schema.withCdc);
+        schema.setCassandraVersion(TestVersionSupplier.testVersion());
 
         try
         {

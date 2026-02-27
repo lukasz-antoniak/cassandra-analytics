@@ -53,9 +53,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.cassandra.bridge.CassandraBridge;
-import org.apache.cassandra.bridge.CassandraBridgeImplementation;
+import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
-import org.apache.cassandra.bridge.CdcBridgeImplementation;
+import org.apache.cassandra.bridge.CdcBridgeFactory;
 import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.cdc.api.CdcOptions;
 import org.apache.cassandra.cdc.api.CommitLog;
@@ -69,13 +69,12 @@ import org.apache.cassandra.cdc.msg.Value;
 import org.apache.cassandra.cdc.msg.jdk.JdkMessageConverter;
 import org.apache.cassandra.cdc.state.CdcState;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
-import org.apache.cassandra.schema.Schema;
 import org.apache.cassandra.serializers.CollectionSerializer;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.data.CqlTable;
+import org.apache.cassandra.spark.data.ReplicationFactor;
 import org.apache.cassandra.spark.data.partitioner.CassandraInstance;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
-import org.apache.cassandra.spark.reader.SchemaBuilder;
 import org.apache.cassandra.spark.utils.AsyncExecutor;
 import org.apache.cassandra.spark.utils.ByteBufferUtils;
 import org.apache.cassandra.spark.utils.IOUtils;
@@ -107,6 +106,11 @@ public class CdcTests
         {
             return 1;
         }
+
+        public CassandraVersion version()
+        {
+            return TestVersionSupplier.testVersion();
+        }
     };
     public static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4,
                                                                                 new ThreadFactoryBuilder()
@@ -114,10 +118,9 @@ public class CdcTests
                                                                                 .setDaemon(true)
                                                                                 .build());
     public static final AsyncExecutor ASYNC_EXECUTOR = AsyncExecutor.wrap(EXECUTOR);
-    // TODO: Execute CDC tests also with Cassandra 5 bridge.
-    public static final CassandraBridge BRIDGE = new CassandraBridgeImplementation();
+    public static final CassandraBridge BRIDGE = CdcBridgeFactory.get(TestVersionSupplier.testVersion());
     public static final JdkMessageConverter MESSAGE_CONVERTER = new JdkMessageConverter(BRIDGE.cassandraTypes());
-    public static final CdcBridge CDC_BRIDGE = new CdcBridgeImplementation();
+    public static final CdcBridge CDC_BRIDGE = CdcBridgeFactory.getCdcBridge(TestVersionSupplier.testVersion());
 
     private static final int TTL = 42;
 
@@ -143,7 +146,7 @@ public class CdcTests
         {
             throw new RuntimeException(e);
         }
-        CdcTester.setup(directory);
+        CdcTester.setup(CDC_BRIDGE, directory);
         isSetup = true;
     }
 
@@ -215,7 +218,6 @@ public class CdcTests
                                null,
                                0,
                                true);
-            UUID tableId = Schema.instance.getTableMetadata(table.keyspace(), table.table()).id.asUUID();
             SchemaSupplier schemaSupplier = () -> CompletableFuture.completedFuture(ImmutableSet.of(table));
             AtomicReference<byte[]> state = new AtomicReference<>();
             StatePersister statePersister = new StatePersister()
@@ -254,7 +256,7 @@ public class CdcTests
             try (Cdc cdc = Cdc.builder("101", 0, eventConsumer, schemaSupplier)
                               .withExecutor(CdcTests.ASYNC_EXECUTOR)
                               .withStatePersister(statePersister)
-                              .withTableIdLookup((ks, tb) -> tableId)
+                              .withTableIdLookup(CDC_BRIDGE.internalTableIdLookup())
                               .withCommitLogProvider(CdcTests.logProvider(CdcTests.directory))
                               .withCdcOptions(CdcTests.TEST_OPTIONS)
                               .build())
@@ -542,8 +544,18 @@ public class CdcTests
         TestSchema schema3 = tableBuilder3.build();
         CqlTable cqlTable2 = schema2.buildTable();
         CqlTable cqlTable3 = schema3.buildTable();
-        new SchemaBuilder(cqlTable2, Partitioner.Murmur3Partitioner, schema2.withCdc);
-        new SchemaBuilder(cqlTable3, Partitioner.Murmur3Partitioner, schema3.withCdc);
+        BRIDGE.buildSchema(cqlTable2.createStatement(),
+                           cqlTable2.keyspace(),
+                           ReplicationFactor.simpleStrategy(1),
+                           Partitioner.Murmur3Partitioner,
+                           Collections.emptySet(),
+                           null, 0, schema2.withCdc);
+        BRIDGE.buildSchema(cqlTable3.createStatement(),
+                           cqlTable3.keyspace(),
+                           ReplicationFactor.simpleStrategy(1),
+                           Partitioner.Murmur3Partitioner,
+                           Collections.emptySet(),
+                           null, 0, schema3.withCdc);
         int numRows = DEFAULT_NUM_ROWS;
 
         AtomicReference<TestSchema> schema1Holder = new AtomicReference<>();

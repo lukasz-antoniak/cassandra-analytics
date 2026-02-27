@@ -30,14 +30,16 @@ import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
+import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.CdcTester;
 import org.apache.cassandra.cdc.CdcTests;
 import org.apache.cassandra.cdc.api.CommitLog;
+import org.apache.cassandra.cdc.api.CommitLogMarkers;
 import org.apache.cassandra.cdc.api.Marker;
 import org.apache.cassandra.cdc.stats.CdcStats;
 import org.apache.cassandra.spark.data.CqlTable;
+import org.apache.cassandra.spark.data.ReplicationFactor;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
-import org.apache.cassandra.spark.reader.SchemaBuilder;
 import org.apache.cassandra.spark.utils.TimeProvider;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.jetbrains.annotations.Nullable;
@@ -64,7 +66,12 @@ public class BufferingCommitLogReaderTests
                                       .withCdc(true)
                                       .build();
         CqlTable cqlTable = schema.buildTable();
-        new SchemaBuilder(cqlTable, Partitioner.Murmur3Partitioner, true); // init Schema instance
+        BRIDGE.buildSchema(cqlTable.createStatement(),
+                           cqlTable.keyspace(),
+                           ReplicationFactor.simpleStrategy(1),
+                           Partitioner.Murmur3Partitioner,
+                           Collections.emptySet(),
+                           null, 0, true);
         int numRows = 1000;
 
         // write some rows to a CommitLog
@@ -89,7 +96,7 @@ public class BufferingCommitLogReaderTests
 
         // read entire commit log and verify correct
         Consumer<Marker> listener = markers::add;
-        Set<Long> allRows = readLog(null, keys, firstLog, listener);
+        Set<Long> allRows = readLog(CDC_BRIDGE, null, keys, firstLog, listener);
         assertThat(allRows).hasSize(numRows);
 
         // re-read commit log from each watermark position
@@ -101,7 +108,7 @@ public class BufferingCommitLogReaderTests
         assertThat(allMarkers).isNotEmpty();
         for (Marker marker : allMarkers)
         {
-            Set<Long> result = readLog(marker, keys, firstLog, null);
+            Set<Long> result = readLog(CDC_BRIDGE, marker, keys, firstLog, null);
             assertThat(result.size()).isLessThan(foundRows);
             foundRows = result.size();
             if (prevMarker != null)
@@ -124,32 +131,30 @@ public class BufferingCommitLogReaderTests
         }
     }
 
-    private Set<Long> readLog(@Nullable Marker highWaterMark,
+    private Set<Long> readLog(CdcBridge cdcBridge,
+                              @Nullable Marker highWaterMark,
                               Set<Long> keys,
                               CommitLog logFile,
                               @Nullable Consumer<Marker> listener)
     {
         Set<Long> keysRead = new HashSet<>();
 
-        try (BufferingCommitLogReader reader = new BufferingCommitLogReader(logFile,
-                                                                            highWaterMark,
-                                                                            CdcStats.STUB,
-                                                                            listener))
+        BufferingCommitLogReader.Result result = cdcBridge.readLog(logFile,
+                                                                   null,
+                                                                   CommitLogMarkers.of(highWaterMark),
+                                                                   0,
+                                                                   CdcStats.STUB,
+                                                                   null,
+                                                                   listener,
+                                                                   null,
+                                                                   false);
+        for (PartitionUpdateWrapper update : result.updates())
         {
-            BufferingCommitLogReader.Result result = reader.result();
-            for (PartitionUpdateWrapper update : result.updates())
-            {
-                long key = Objects.requireNonNull(update.partitionKey()).getLong();
-                assertThat(keysRead).doesNotContain(key);
-                keysRead.add(key);
-                assertThat(keys).contains(key);
-            }
-
-            return keysRead;
+            long key = Objects.requireNonNull(update.partitionKey()).getLong();
+            assertThat(keysRead).doesNotContain(key);
+            keysRead.add(key);
+            assertThat(keys).contains(key);
         }
-        catch (Exception e)
-        {
-            throw new RuntimeException(e);
-        }
+        return keysRead;
     }
 }

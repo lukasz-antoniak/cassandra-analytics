@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.cdc;
 
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -37,17 +38,17 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.bridge.BridgeInitializationParameters;
 import org.apache.cassandra.bridge.CassandraBridge;
-import org.apache.cassandra.bridge.CassandraVersion;
-import org.apache.cassandra.bridge.CdcBridgeImplementation;
+import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.api.CassandraSource;
 import org.apache.cassandra.cdc.api.CdcOptions;
+import org.apache.cassandra.cdc.api.CommitLogInstance;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.state.CdcState;
 import org.apache.cassandra.spark.data.CqlTable;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
 import org.apache.cassandra.spark.utils.IOUtils;
-import org.apache.cassandra.spark.utils.ThrowableUtils;
 import org.apache.cassandra.spark.utils.TimeProvider;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.jetbrains.annotations.Nullable;
@@ -61,17 +62,27 @@ public class CdcTester
     private static final Logger LOGGER = LoggerFactory.getLogger(CdcTester.class);
     public static final int DEFAULT_NUM_ROWS = 1000;
 
-    public static FourZeroCommitLog testCommitLog;
+    public static CommitLogInstance testCommitLog;
 
-    public static void setup(Path testDirectory)
+    public static void setup(CdcBridge cdcBridge, Path testDirectory)
     {
-        setup(testDirectory, 32, false);
+        setup(cdcBridge, testDirectory, 32, false);
     }
 
-    public static void setup(Path testDirectory, int commitLogSegmentSize, boolean enableCompression)
+    public static void setup(CdcBridge cdcBridge, Path testDirectory, int commitLogSegmentSize, boolean enableCompression)
     {
-        CdcBridgeImplementation.setup(testDirectory, commitLogSegmentSize, enableCompression);
-        testCommitLog = new FourZeroCommitLog(testDirectory);
+        try
+        {
+            // TODO: Refactor static initialization to instance method.
+            // use reflection to execute static initialization
+            Method setupMethod = cdcBridge.getClass().getMethod("setup", Path.class, int.class, boolean.class, BridgeInitializationParameters.class);
+            setupMethod.invoke(null, testDirectory, commitLogSegmentSize, enableCompression, BridgeInitializationParameters.fromEnvironment());
+        }
+        catch (Exception e)
+        {
+            throw new IllegalStateException("Failed to setup CdcBridge", e);
+        }
+        testCommitLog = cdcBridge.createCommitLogInstance(testDirectory);
     }
 
     public static void tearDown()
@@ -260,7 +271,6 @@ public class CdcTester
     void run()
     {
         Map<String, TestSchema.TestRow> rows = new LinkedHashMap<>(numRows);
-        CassandraVersion version = CassandraVersion.FOURZERO;
 
         List<CdcEvent> cdcEvents = new ArrayList<>();
         try
@@ -268,7 +278,7 @@ public class CdcTester
             LOGGER.info("Running CDC test testId={} schema='{}' thread={}", testId, cqlTable.fields(), Thread.currentThread().getName());
             Set<String> udtStmts = schema.udts.stream().map(e -> e.createStatement(bridge.cassandraTypes(), schema.keyspace)).collect(Collectors.toSet());
             bridge.buildSchema(schema.createStatement, schema.keyspace, schema.rf, partitioner, udtStmts, null, 0, true);
-            schema.setCassandraVersion(version);
+            schema.setCassandraVersion(TestVersionSupplier.testVersion());
 
             // write some mutations to CDC CommitLog
             for (CdcWriter writer : writers)
@@ -312,8 +322,7 @@ public class CdcTester
         }
         catch (Throwable t)
         {
-            LOGGER.error("Unexpected error in CdcTester", ThrowableUtils.rootCause(t));
-            t.printStackTrace();
+            LOGGER.error("Unexpected error in CdcTester", t);
             fail("Unexpected error in CdcTester");
         }
         finally

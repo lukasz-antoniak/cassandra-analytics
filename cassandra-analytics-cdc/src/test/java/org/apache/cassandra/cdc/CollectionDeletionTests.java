@@ -32,10 +32,8 @@ import java.util.stream.Collectors;
 import com.google.common.collect.ImmutableList;
 import org.junit.jupiter.api.Test;
 
-import org.apache.cassandra.bridge.CollectionElement;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.Value;
-import org.apache.cassandra.db.rows.CellPath;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
@@ -115,7 +113,8 @@ public class CollectionDeletionTests
                                 testRow = CdcTester.newUniqueRow(tester.schema, rows);
                                 for (String name : collectionColumnNames)
                                 {
-                                    testRow = testRow.copy(name, CollectionElement.deleted(CellPath.create(key)));
+                                    Object value = TestUtils.collectionDeleteMutation(TestVersionSupplier.testVersion(), key);
+                                    testRow = testRow.copy(name, value);
                                 }
                                 elementDeletionIndices.put(i, key.array());
                             }

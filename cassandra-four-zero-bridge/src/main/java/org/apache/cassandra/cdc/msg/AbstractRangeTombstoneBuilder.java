@@ -22,23 +22,37 @@ package org.apache.cassandra.cdc.msg;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/**
- * Keep track of the last range tombstone marker to build {@link RangeTombstone}
- * The caller should check whether {@link #canBuild()} after adding marker, and it should build whenever possible.
- *
- * @param <T>
- */
-public interface RangeTombstoneBuilder<T>
+public abstract class AbstractRangeTombstoneBuilder<T> implements RangeTombstoneBuilder<T>
 {
-    RangeTombstone buildTombstone(List<Value> start, boolean isStartInclusive, List<Value> end, boolean isEndInclusive);
-    boolean canBuild();
-    RangeTombstone build();
-    void add(T marker);
+    RangeTombstone rangeTombstone;
+    boolean expectOpen = true;
+
+    public RangeTombstone buildTombstone(List<Value> start, boolean isStartInclusive, List<Value> end, boolean isEndInclusive)
+    {
+        return new RangeTombstone(start, isStartInclusive, end, isEndInclusive);
+    }
+
+    public boolean canBuild()
+    {
+        return rangeTombstone != null;
+    }
+
+    public RangeTombstone build()
+    {
+        RangeTombstone res = rangeTombstone;
+        rangeTombstone = null;
+        return res;
+    }
+
+    public abstract void add(T marker);
 
     /**
      * @return true when there is range tombstone marker not consumed.
      */
-    boolean hasIncompleteRange();
+    public abstract boolean hasIncompleteRange();
 
-    Value buildValue(String keyspace, String name, String type, ByteBuffer buf);
+    public Value buildValue(String keyspace, String name, String type, ByteBuffer buf)
+    {
+        return new Value(keyspace, name, type, buf);
+    }
 }
