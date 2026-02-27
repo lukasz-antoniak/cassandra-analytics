@@ -37,6 +37,7 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.bridge.BridgeInitializationParameters;
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridgeImplementation;
@@ -70,7 +71,7 @@ public class CdcTester
 
     public static void setup(Path testDirectory, int commitLogSegmentSize, boolean enableCompression)
     {
-        CdcBridgeImplementation.setup(testDirectory, commitLogSegmentSize, enableCompression);
+        CdcBridgeImplementation.setup(testDirectory, commitLogSegmentSize, enableCompression, BridgeInitializationParameters.fromEnvironment());
         testCommitLog = new FourZeroCommitLog(testDirectory);
     }
 

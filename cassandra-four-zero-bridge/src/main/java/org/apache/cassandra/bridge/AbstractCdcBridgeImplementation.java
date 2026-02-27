@@ -189,7 +189,8 @@ public abstract class AbstractCdcBridgeImplementation extends CdcBridge
 
         if (row.isDeleted())
         {
-            rowBuilder.addRowDeletion(org.apache.cassandra.db.rows.Row.Deletion.regular(new DeletionTime(timestamp, timeProvider.nowInSeconds())));
+            rowBuilder.addRowDeletion(org.apache.cassandra.db.rows.Row.Deletion.regular(
+            CdcBridgeImplementation.createDeletionTime(timestamp, timeProvider.nowInSeconds())));
         }
         else
         {

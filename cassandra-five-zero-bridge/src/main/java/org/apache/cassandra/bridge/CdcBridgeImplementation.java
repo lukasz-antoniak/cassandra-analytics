@@ -27,6 +27,7 @@ import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DataStorageSpec;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.ParameterizedClass;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.commitlog.CommitLogSegmentManagerCDC;
 import org.apache.cassandra.security.EncryptionContext;
 
@@ -67,7 +68,13 @@ public class CdcBridgeImplementation extends AbstractCdcBridgeImplementation
         DatabaseDescriptor.setCommitLogSyncGroupWindow(30);
         DatabaseDescriptor.setCommitLogSegmentSize(commitLogSegmentSize);
         DatabaseDescriptor.getRawConfig().commitlog_total_space = new DataStorageSpec.IntMebibytesBound(1024);
+        DatabaseDescriptor.setCommitLogWriteDiskAccessMode(Config.DiskAccessMode.direct);
+        DatabaseDescriptor.setCDCTotalSpaceInMiB(1024);
         DatabaseDescriptor.setCommitLogSegmentMgrProvider((commitLog -> new CommitLogSegmentManagerCDC(commitLog, commitLogPath.toString())));
         setup = true;
+    }
+
+    public static DeletionTime createDeletionTime(long markedForDeleteAt, int localDeletionTime) {
+        return DeletionTime.build(markedForDeleteAt, localDeletionTime);
     }
 }

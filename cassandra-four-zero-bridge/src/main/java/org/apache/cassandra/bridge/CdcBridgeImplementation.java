@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.ParameterizedClass;
+import org.apache.cassandra.db.DeletionTime;
 import org.apache.cassandra.db.commitlog.CommitLogSegmentManagerCDC;
 import org.apache.cassandra.security.EncryptionContext;
 
@@ -33,9 +34,9 @@ public class CdcBridgeImplementation extends AbstractCdcBridgeImplementation
 {
     public static volatile boolean setup = false;
 
-    public static void setup(Path path, int commitLogSegmentSize, boolean enableCompression)
+    public static void setup(Path path, int commitLogSegmentSize, boolean enableCompression, BridgeInitializationParameters bridgeParams)
     {
-        CassandraTypesImplementation.setup(BridgeInitializationParameters.fromEnvironment());
+        CassandraTypesImplementation.setup(bridgeParams);
         setCDC(path, commitLogSegmentSize, enableCompression);
     }
 
@@ -69,5 +70,9 @@ public class CdcBridgeImplementation extends AbstractCdcBridgeImplementation
         DatabaseDescriptor.getRawConfig().commitlog_total_space_in_mb = 1024;
         DatabaseDescriptor.setCommitLogSegmentMgrProvider((commitLog -> new CommitLogSegmentManagerCDC(commitLog, commitLogPath.toString())));
         setup = true;
+    }
+
+    public static DeletionTime createDeletionTime(long markedForDeleteAt, int localDeletionTime) {
+        return new DeletionTime(markedForDeleteAt, localDeletionTime);
     }
 }
