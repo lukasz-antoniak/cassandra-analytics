@@ -63,7 +63,7 @@ public class KafkaPublisher implements AutoCloseable
     ThreadLocal.withInitial(HashMap::new);
     protected final KafkaStats kafkaStats;
 
-    public KafkaPublisher(String version,
+    public KafkaPublisher(CassandraVersion version,
                           TopicSupplier topicSupplier,
                           KafkaProducer<String, byte[]> producer,
                           Serializer<CdcEvent> serializer,
@@ -87,7 +87,7 @@ public class KafkaPublisher implements AutoCloseable
         );
     }
 
-    public KafkaPublisher(String version,
+    public KafkaPublisher(CassandraVersion version,
                           TopicSupplier topicSupplier,
                           KafkaProducer<String, byte[]> producer,
                           Serializer<CdcEvent> serializer,
@@ -99,8 +99,7 @@ public class KafkaPublisher implements AutoCloseable
                           RecordProducer recordProducer,
                           EventHasher eventHasher)
     {
-        this.version = CassandraVersion.fromVersion(version).orElseThrow(
-        () -> new IllegalArgumentException("Unsupported Cassandra version: " + version));
+        this.version = version;
         this.topicSupplier = topicSupplier;
         this.maxRecordSizeBytes = maxRecordSizeBytes;
         this.failOnRecordTooLargeError = failOnRecordTooLargeError;

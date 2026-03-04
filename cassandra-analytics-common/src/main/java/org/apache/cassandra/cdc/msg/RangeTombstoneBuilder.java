@@ -25,6 +25,8 @@ import java.util.List;
 /**
  * Keep track of the last range tombstone marker to build {@link RangeTombstone}
  * The caller should check whether {@link #canBuild()} after adding marker, and it should build whenever possible.
+ * IMPLEMENTATION NOTE: Refactored from abstract class to interface, due to classloader clash. Superclass is loaded
+ * by application classloader, but concrete implementation (from bridge module) with dedicated classloader.
  *
  * @param <T>
  */
