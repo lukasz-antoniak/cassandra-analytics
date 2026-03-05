@@ -244,7 +244,7 @@ public class FourZeroCdcEventBuilder extends CdcEventBuilder
                 {
                     // TODO: CASSANDRA-14227 Support unit interpretation,
                     //  so that TTL does not overflow and become negative.
-                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime()));
+                    setTTL(cell.ttl(), cell.localDeletionTime());
                 }
             }
         }
@@ -274,7 +274,7 @@ public class FourZeroCdcEventBuilder extends CdcEventBuilder
                 buffer.addCell(cell);
                 if (cell.isExpiring())
                 {
-                    setTTL(cell.ttl(), Cell.deletionTimeLongToUnsignedInteger(cell.localDeletionTime()));
+                    setTTL(cell.ttl(), cell.localDeletionTime());
                 }
             }
         }
