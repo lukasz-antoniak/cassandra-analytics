@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.cdc;
 
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +29,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.google.common.base.Preconditions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import org.apache.cassandra.bridge.CassandraBridge;
+import org.apache.cassandra.bridge.CassandraVersion;
+import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.api.RangeTombstoneData;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.RangeTombstone;
@@ -38,64 +43,74 @@ import org.apache.cassandra.spark.utils.ComparisonUtils;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
 import static org.apache.cassandra.cdc.CdcTester.testWith;
-import static org.apache.cassandra.cdc.CdcTests.BRIDGE;
-import static org.apache.cassandra.cdc.CdcTests.directory;
 import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
 public class RangeDeletionTests
 {
-    @Test
-    public void testRangeDeletions()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testRangeDeletions(CassandraVersion version)
     {
-        testRangeDeletions(false, // has static
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testRangeDeletions(bridge, cdcBridge,
+                           false, // has static
                            1, // num of partition key columns
                            2, // num of clustering key columns
                            true, // openEnd
-                           type -> TestSchema.builder(BRIDGE)
-                                             .withPartitionKey("pk1", BRIDGE.uuid())
+                           type -> TestSchema.builder(bridge)
+                                             .withPartitionKey("pk1", bridge.uuid())
                                              .withClusteringKey("ck1", type)
-                                             .withClusteringKey("ck2", BRIDGE.bigint())
+                                             .withClusteringKey("ck2", bridge.bigint())
                                              .withColumn("c1", type));
-        testRangeDeletions(false, // has static
+        testRangeDeletions(bridge, cdcBridge,
+                           false, // has static
                            1, // num of partition key columns
                            2, // num of clustering key columns
                            false, // openEnd
-                           type -> TestSchema.builder(BRIDGE)
-                                             .withPartitionKey("pk1", BRIDGE.uuid())
+                           type -> TestSchema.builder(bridge)
+                                             .withPartitionKey("pk1", bridge.uuid())
                                              .withClusteringKey("ck1", type)
-                                             .withClusteringKey("ck2", BRIDGE.bigint())
+                                             .withClusteringKey("ck2", bridge.bigint())
                                              .withColumn("c1", type));
     }
 
-    @Test
-    public void testRangeDeletionsWithStatic()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testRangeDeletionsWithStatic(CassandraVersion version)
     {
-        testRangeDeletions(true, // has static
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testRangeDeletions(bridge, cdcBridge,
+                           true, // has static
                            1, // num of partition key columns
                            2, // num of clustering key columns
                            true, // openEnd
-                           type -> TestSchema.builder(BRIDGE)
-                                             .withPartitionKey("pk1", BRIDGE.uuid())
-                                             .withClusteringKey("ck1", BRIDGE.ascii())
-                                             .withClusteringKey("ck2", BRIDGE.bigint())
-                                             .withStaticColumn("s1", BRIDGE.uuid())
+                           type -> TestSchema.builder(bridge)
+                                             .withPartitionKey("pk1", bridge.uuid())
+                                             .withClusteringKey("ck1", bridge.ascii())
+                                             .withClusteringKey("ck2", bridge.bigint())
+                                             .withStaticColumn("s1", bridge.uuid())
                                              .withColumn("c1", type));
-        testRangeDeletions(true, // has static
+        testRangeDeletions(bridge, cdcBridge,
+                           true, // has static
                            1, // num of partition key columns
                            2, // num of clustering key columns
                            false, // openEnd
-                           type -> TestSchema.builder(BRIDGE)
-                                             .withPartitionKey("pk1", BRIDGE.uuid())
-                                             .withClusteringKey("ck1", BRIDGE.ascii())
-                                             .withClusteringKey("ck2", BRIDGE.bigint())
-                                             .withStaticColumn("s1", BRIDGE.uuid())
+                           type -> TestSchema.builder(bridge)
+                                             .withPartitionKey("pk1", bridge.uuid())
+                                             .withClusteringKey("ck1", bridge.ascii())
+                                             .withClusteringKey("ck2", bridge.bigint())
+                                             .withStaticColumn("s1", bridge.uuid())
                                              .withColumn("c1", type));
     }
 
     // validate that range deletions can be correctly encoded.
-    private void testRangeDeletions(boolean hasStatic,
+    private void testRangeDeletions(CassandraBridge bridge,
+                                    CdcBridge cdcBridge,
+                                    boolean hasStatic,
                                     int numOfPartitionKeys,
                                     int numOfClusteringKeys,
                                     boolean withOpenEnd,
@@ -106,11 +121,12 @@ public class RangeDeletionTests
         Map<Integer, TestSchema.TestRow> rangeTombstones = new HashMap<>();
         long minTimestamp = System.currentTimeMillis();
         int numRows = 1000;
-        qt().forAll(cql3Type(BRIDGE))
+        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
+        qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(
             type ->
-            testWith(BRIDGE, directory, schemaBuilder.apply(type))
+            testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
             .withAddLastModificationTime(true)
             .clearWriters()
             .withNumRows(numRows)
@@ -148,13 +164,13 @@ public class RangeDeletionTests
                         assertThat(rt.getStartBound()).hasSize(numOfClusteringKeys);
                         assertThat(rt.getEndBound()).hasSize(withOpenEnd ? numOfClusteringKeys - 1 : numOfClusteringKeys);
                         Object[] startBoundVals = rt.getStartBound().stream()
-                                                    .map(v -> v.getCqlType(BRIDGE::parseType)
+                                                    .map(v -> v.getCqlType(bridge::parseType)
                                                                .deserializeToJavaType(v.getValue()))
                                                     .toArray();
                         assertComparisonEquals(expectedRT.open.values, startBoundVals);
 
                         Object[] endBoundVals = rt.getEndBound().stream()
-                                                  .map(v -> v.getCqlType(BRIDGE::parseType)
+                                                  .map(v -> v.getCqlType(bridge::parseType)
                                                              .deserializeToJavaType(v.getValue()))
                                                   .toArray();
                         // The range bound in mutation does not encode the null value.

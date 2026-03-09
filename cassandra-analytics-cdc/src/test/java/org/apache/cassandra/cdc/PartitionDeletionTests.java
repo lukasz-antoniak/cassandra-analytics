@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.cdc;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -29,65 +30,82 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import org.apache.cassandra.bridge.CassandraBridge;
+import org.apache.cassandra.bridge.CassandraVersion;
+import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.ComparisonUtils;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
 import static org.apache.cassandra.cdc.CdcTester.testWith;
-import static org.apache.cassandra.cdc.CdcTests.BRIDGE;
-import static org.apache.cassandra.cdc.CdcTests.directory;
 import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
 public class PartitionDeletionTests
 {
-    @Test
-    public void testPartitionDeletionWithStaticColumn()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testPartitionDeletionWithStaticColumn(CassandraVersion version)
     {
-        testPartitionDeletion(true, // has static columns
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testPartitionDeletion(bridge, cdcBridge,
+                              true, // has static columns
                               true, // has clustering key
                               1, // partition key columns
-                              type -> TestSchema.builder(BRIDGE)
-                                                .withPartitionKey("pk", BRIDGE.uuid())
-                                                .withClusteringKey("ck", BRIDGE.bigint())
-                                                .withStaticColumn("sc", BRIDGE.bigint())
+                              type -> TestSchema.builder(bridge)
+                                                .withPartitionKey("pk", bridge.uuid())
+                                                .withClusteringKey("ck", bridge.bigint())
+                                                .withStaticColumn("sc", bridge.bigint())
                                                 .withColumn("c1", type)
-                                                .withColumn("c2", BRIDGE.bigint()));
+                                                .withColumn("c2", bridge.bigint()));
     }
 
-    @Test
-    public void testPartitionDeletionWithoutCK()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testPartitionDeletionWithoutCK(CassandraVersion version)
     {
-        testPartitionDeletion(false, // has static columns
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testPartitionDeletion(bridge, cdcBridge,
+                              false, // has static columns
                               false, // has clustering key
                               3, // partition key columns
-                              type -> TestSchema.builder(BRIDGE)
-                                                .withPartitionKey("pk1", BRIDGE.uuid())
+                              type -> TestSchema.builder(bridge)
+                                                .withPartitionKey("pk1", bridge.uuid())
                                                 .withPartitionKey("pk2", type)
-                                                .withPartitionKey("pk3", BRIDGE.bigint())
+                                                .withPartitionKey("pk3", bridge.bigint())
                                                 .withColumn("c1", type)
-                                                .withColumn("c2", BRIDGE.bigint()));
+                                                .withColumn("c2", bridge.bigint()));
     }
 
-    @Test
-    public void testPartitionDeletionWithCompositePK()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testPartitionDeletionWithCompositePK(CassandraVersion version)
     {
-        testPartitionDeletion(false, // has static columns
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testPartitionDeletion(bridge, cdcBridge,
+                              false, // has static columns
                               true, // has clustering key
                               2, // partition key columns
-                              type -> TestSchema.builder(BRIDGE)
-                                                .withPartitionKey("pk1", BRIDGE.uuid())
+                              type -> TestSchema.builder(bridge)
+                                                .withPartitionKey("pk1", bridge.uuid())
                                                 .withPartitionKey("pk2", type)
-                                                .withClusteringKey("ck", BRIDGE.bigint())
+                                                .withClusteringKey("ck", bridge.bigint())
                                                 .withColumn("c1", type)
-                                                .withColumn("c2", BRIDGE.bigint()));
+                                                .withColumn("c2", bridge.bigint()));
     }
 
     // At most can have 1 clustering key when `hasClustering` is true.
-    private void testPartitionDeletion(boolean hasStatic,
+    private void testPartitionDeletion(CassandraBridge bridge,
+                                       CdcBridge cdcBridge,
+                                       boolean hasStatic,
                                        boolean hasClustering,
                                        int partitionKeys,
                                        Function<CqlField.NativeType, TestSchema.Builder> schemaBuilder)
@@ -101,10 +119,11 @@ public class PartitionDeletionTests
         final Random rnd = new Random(1);
         final long minTimestamp = System.currentTimeMillis();
         final int numRows = 1000;
-        qt().forAll(cql3Type(BRIDGE))
+        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
+        qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(type -> {
-                testWith(BRIDGE, directory, schemaBuilder.apply(type))
+                testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
                 .withAddLastModificationTime(true)
                 .clearWriters()
                 .withNumRows(numRows)
@@ -158,7 +177,7 @@ public class PartitionDeletionTests
 
                             List<Object> testPKs = event.getPartitionKeys().stream()
                                                         .map(v -> {
-                                                            CqlField.CqlType cqlType = v.getCqlType(BRIDGE::parseType);
+                                                            CqlField.CqlType cqlType = v.getCqlType(bridge::parseType);
                                                             return cqlType.deserializeToJavaType(v.getValue());
                                                         })
                                                         .collect(Collectors.toList());

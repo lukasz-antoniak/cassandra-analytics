@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.cdc;
 
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -26,59 +27,75 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import org.apache.cassandra.bridge.CassandraBridge;
+import org.apache.cassandra.bridge.CassandraVersion;
+import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.msg.CdcEvent;
+import org.apache.cassandra.cdc.msg.jdk.JdkMessageConverter;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
 import static org.apache.cassandra.cdc.CdcTester.testWith;
-import static org.apache.cassandra.cdc.CdcTests.BRIDGE;
-import static org.apache.cassandra.cdc.CdcTests.MESSAGE_CONVERTER;
-import static org.apache.cassandra.cdc.CdcTests.directory;
 import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
 public class RowDeletionTests
 {
-    @Test
-    public void testRowDeletionWithClusteringKeyAndStatic()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testRowDeletionWithClusteringKeyAndStatic(CassandraVersion version)
     {
-        testRowDeletion(true, // has static
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testRowDeletion(bridge, cdcBridge,
+                        true, // has static
                         true, // has clustering key?
-                        type -> TestSchema.builder(BRIDGE)
-                                          .withPartitionKey("pk", BRIDGE.uuid())
-                                          .withClusteringKey("ck", BRIDGE.bigint())
-                                          .withStaticColumn("sc", BRIDGE.bigint())
+                        type -> TestSchema.builder(bridge)
+                                          .withPartitionKey("pk", bridge.uuid())
+                                          .withClusteringKey("ck", bridge.bigint())
+                                          .withStaticColumn("sc", bridge.bigint())
                                           .withColumn("c1", type)
-                                          .withColumn("c2", BRIDGE.bigint()));
+                                          .withColumn("c2", bridge.bigint()));
     }
 
-    @Test
-    public void testRowDeletionWithClusteringKeyNoStatic()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testRowDeletionWithClusteringKeyNoStatic(CassandraVersion version)
     {
-        testRowDeletion(false, // has static
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testRowDeletion(bridge, cdcBridge,
+                        false, // has static
                         true, // has clustering key?
-                        type -> TestSchema.builder(BRIDGE)
-                                          .withPartitionKey("pk", BRIDGE.uuid())
-                                          .withClusteringKey("ck", BRIDGE.bigint())
+                        type -> TestSchema.builder(bridge)
+                                          .withPartitionKey("pk", bridge.uuid())
+                                          .withClusteringKey("ck", bridge.bigint())
                                           .withColumn("c1", type)
-                                          .withColumn("c2", BRIDGE.bigint()));
+                                          .withColumn("c2", bridge.bigint()));
     }
 
-    @Test
-    public void testRowDeletionSimpleSchema()
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testRowDeletionSimpleSchema(CassandraVersion version)
     {
-        testRowDeletion(false, // has static
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        testRowDeletion(bridge, cdcBridge,
+                        false, // has static
                         false, // has clustering key?
-                        type -> TestSchema.builder(BRIDGE)
-                                          .withPartitionKey("pk", BRIDGE.uuid())
+                        type -> TestSchema.builder(bridge)
+                                          .withPartitionKey("pk", bridge.uuid())
                                           .withColumn("c1", type)
-                                          .withColumn("c2", BRIDGE.bigint()));
+                                          .withColumn("c2", bridge.bigint()));
     }
 
-    private void testRowDeletion(boolean hasStatic,
+    private void testRowDeletion(CassandraBridge bridge,
+                                 CdcBridge cdcBridge,
+                                 boolean hasStatic,
                                  boolean hasClustering,
                                  Function<CqlField.NativeType, TestSchema.Builder> schemaBuilder)
     {
@@ -90,9 +107,11 @@ public class RowDeletionTests
         final Random rnd = new Random(1);
         final long minTimestamp = System.currentTimeMillis();
         final int numRows = 1000;
-        qt().forAll(cql3Type(BRIDGE))
+        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
+        final JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(bridge.getVersion());
+        qt().forAll(cql3Type(bridge))
             .checkAssert(
-            type -> testWith(BRIDGE, directory, schemaBuilder.apply(type))
+            type -> testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
                     .withAddLastModificationTime(true)
                     .clearWriters()
                     .withNumRows(numRows)
@@ -116,7 +135,7 @@ public class RowDeletionTests
                         {
                             CdcEvent event = events.get(i);
                             long lmtInMillis = event.getTimestamp(TimeUnit.MILLISECONDS);
-                            UUID pk = (UUID) MESSAGE_CONVERTER.toCdcMessage(event.getPartitionKeys().get(0)).value();
+                            UUID pk = (UUID) messageConverter.toCdcMessage(event.getPartitionKeys().get(0)).value();
                             assertThat(lmtInMillis)
                             .as("Last modification time should have a lower bound of " + minTimestamp)
                             .isGreaterThanOrEqualTo(minTimestamp);

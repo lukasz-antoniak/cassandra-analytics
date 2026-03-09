@@ -37,12 +37,4 @@ public final class TestVersionSupplier
                      .map(String::trim)
                      .map(v -> CassandraVersion.fromVersion(v).orElseThrow(() -> new IllegalArgumentException("Unsupported version: " + v)));
     }
-
-    @Deprecated
-    public static CassandraVersion testVersion()
-    {
-        // TODO: Refactor to parametrized tests and verify all Cassandra versions in a single test run.
-        //  Usage of this method shall be replaced with testVersions().
-        return testVersions().findFirst().orElseThrow();
-    }
 }

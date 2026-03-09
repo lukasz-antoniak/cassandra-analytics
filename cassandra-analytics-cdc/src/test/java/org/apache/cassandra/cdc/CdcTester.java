@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.cassandra.bridge.BridgeInitializationParameters;
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CdcBridge;
+import org.apache.cassandra.bridge.CdcBridgeFactory;
 import org.apache.cassandra.cdc.api.CassandraSource;
 import org.apache.cassandra.cdc.api.CdcOptions;
 import org.apache.cassandra.cdc.api.CommitLogInstance;
@@ -53,7 +54,6 @@ import org.apache.cassandra.spark.utils.TimeProvider;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.cassandra.cdc.CdcTests.CDC_BRIDGE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
@@ -62,38 +62,15 @@ public class CdcTester
     private static final Logger LOGGER = LoggerFactory.getLogger(CdcTester.class);
     public static final int DEFAULT_NUM_ROWS = 1000;
 
-    public static CommitLogInstance testCommitLog;
-
-    public static void setup(CdcBridge cdcBridge, Path testDirectory)
-    {
-        setup(cdcBridge, testDirectory, 32, false);
-    }
-
-    public static void setup(CdcBridge cdcBridge, Path testDirectory, int commitLogSegmentSize, boolean enableCompression)
+    public static void closeQuietly(CommitLogInstance commitLog)
     {
         try
         {
-            // TODO: Refactor static initialization to instance method.
-            // use reflection to execute static initialization
-            Method setupMethod = cdcBridge.getClass().getMethod("setup", Path.class, int.class, boolean.class, BridgeInitializationParameters.class);
-            setupMethod.invoke(null, testDirectory, commitLogSegmentSize, enableCompression, BridgeInitializationParameters.fromEnvironment());
-        }
-        catch (Exception e)
-        {
-            throw new IllegalStateException("Failed to setup CdcBridge", e);
-        }
-        testCommitLog = cdcBridge.createCommitLogInstance(testDirectory);
-    }
-
-    public static void tearDown()
-    {
-        try
-        {
-            testCommitLog.stop();
+            commitLog.stop();
         }
         finally
         {
-            testCommitLog.clear();
+            commitLog.clear();
         }
     }
 
@@ -101,12 +78,14 @@ public class CdcTester
     {
         LOGGER.info("Resetting CDC test environment testId={} schema='{}' testDir={} thread={}",
                     testId, cqlTable.fields(), testDir, Thread.currentThread().getName());
-        CdcTester.tearDown();
+        closeQuietly(commitLog);
         IOUtils.clearDirectory(testDir, path -> LOGGER.info("Clearing test output path={}", path.toString()));
-        testCommitLog.start();
+        commitLog.start();
     }
 
     final CassandraBridge bridge;
+    final CdcBridge cdcBridge;
+    final CommitLogInstance commitLog;
     @Nullable
     final Set<String> requiredColumns;
     final UUID testId;
@@ -125,6 +104,7 @@ public class CdcTester
     CassandraSource cassandraSource;
 
     CdcTester(CassandraBridge bridge,
+              CdcBridge cdcBridge,
               TestSchema schema,
               Path testDir,
               List<CdcWriter> writers,
@@ -137,6 +117,8 @@ public class CdcTester
               CassandraSource cassandraSource)
     {
         this.bridge = bridge;
+        this.cdcBridge = cdcBridge;
+        this.commitLog = cdcBridge.createCommitLogInstance(testDir);
         this.testId = UUID.randomUUID();
         this.testDir = testDir;
         this.writers = writers;
@@ -152,14 +134,15 @@ public class CdcTester
         this.cassandraSource = cassandraSource;
     }
 
-    public static Builder builder(CassandraBridge bridge, TestSchema.Builder schemaBuilder, Path testDir)
+    public static Builder builder(CassandraBridge bridge, CdcBridge cdcBridge, TestSchema.Builder schemaBuilder, Path testDir)
     {
-        return new Builder(bridge, schemaBuilder, testDir);
+        return new Builder(bridge, cdcBridge, schemaBuilder, testDir);
     }
 
     public static class Builder
     {
         CassandraBridge bridge;
+        CdcBridge cdcBridge;
         TestSchema.Builder schemaBuilder;
         Path testDir;
         int numRows = CdcTester.DEFAULT_NUM_ROWS;
@@ -168,12 +151,13 @@ public class CdcTester
         boolean addLastModificationTime = false;
         BiConsumer<Map<String, TestSchema.TestRow>, List<CdcEvent>> eventChecker;
         private boolean shouldCdcEventWriterFailOnProcessing = false;
-        private CdcOptions cdcOptions = CdcTests.TEST_OPTIONS;
+        private CdcOptions cdcOptions;
         private CassandraSource cassandraSource = CassandraSource.DEFAULT;
 
-        Builder(CassandraBridge bridge, TestSchema.Builder schemaBuilder, Path testDir)
+        Builder(CassandraBridge bridge, CdcBridge cdcBridge, TestSchema.Builder schemaBuilder, Path testDir)
         {
             this.bridge = bridge;
+            this.cdcBridge = cdcBridge;
             this.schemaBuilder = schemaBuilder.withCdc(true);
             this.testDir = testDir;
 
@@ -246,9 +230,14 @@ public class CdcTester
 
         public CdcTester build()
         {
-            return new CdcTester(bridge, schemaBuilder.build(), testDir, writers, numRows, expectedNumRows,
+            CdcOptions options = cdcOptions;
+            if (options == null)
+            {
+                options = CdcBridgeProvider.getCdcOptions(bridge.getVersion());
+            }
+            return new CdcTester(bridge, cdcBridge, schemaBuilder.build(), testDir, writers, numRows, expectedNumRows,
                                  addLastModificationTime, eventChecker, shouldCdcEventWriterFailOnProcessing,
-                                 cdcOptions, cassandraSource);
+                                 options, cassandraSource);
         }
 
         void run()
@@ -259,13 +248,13 @@ public class CdcTester
 
     public void logRow(CqlTable schema, TestSchema.TestRow row, long timestamp)
     {
-        CDC_BRIDGE.log(TimeProvider.DEFAULT, schema, testCommitLog, row, timestamp);
+        cdcBridge.log(TimeProvider.DEFAULT, schema, commitLog, row, timestamp);
         count++;
     }
 
     public void sync()
     {
-        testCommitLog.sync();
+        commitLog.sync();
     }
 
     void run()
@@ -278,7 +267,7 @@ public class CdcTester
             LOGGER.info("Running CDC test testId={} schema='{}' thread={}", testId, cqlTable.fields(), Thread.currentThread().getName());
             Set<String> udtStmts = schema.udts.stream().map(e -> e.createStatement(bridge.cassandraTypes(), schema.keyspace)).collect(Collectors.toSet());
             bridge.buildSchema(schema.createStatement, schema.keyspace, schema.rf, partitioner, udtStmts, null, 0, true);
-            schema.setCassandraVersion(TestVersionSupplier.testVersion());
+            schema.setCassandraVersion(bridge.getVersion());
 
             // write some mutations to CDC CommitLog
             for (CdcWriter writer : writers)
@@ -296,7 +285,7 @@ public class CdcTester
             CdcState state = CdcState.BLANK;
             while (cdcEvents.size() < expectedNumRows)
             {
-                try (MicroBatchIterator it = new MicroBatchIterator(CDC_BRIDGE,
+                try (MicroBatchIterator it = new MicroBatchIterator(cdcBridge,
                                                                     state,
                                                                     cassandraSource,
                                                                     () -> ImmutableSet.of(schema.keyspace),
@@ -362,9 +351,9 @@ public class CdcTester
         return false;
     }
 
-    public static Builder testWith(CassandraBridge bridge, Path testDir, TestSchema.Builder schemaBuilder)
+    public static Builder testWith(CassandraBridge bridge, CdcBridge cdcBridge, Path testDir, TestSchema.Builder schemaBuilder)
     {
-        return new Builder(bridge, schemaBuilder, testDir);
+        return new Builder(bridge, cdcBridge, schemaBuilder, testDir);
     }
 
     public static TestSchema.TestRow newUniqueRow(TestSchema schema, Map<String, TestSchema.TestRow> rows)

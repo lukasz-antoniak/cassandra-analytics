@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.db.commitlog;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -28,12 +29,16 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import org.apache.cassandra.bridge.CassandraBridge;
+import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
-import org.apache.cassandra.cdc.CdcTester;
+import org.apache.cassandra.cdc.CdcBridgeProvider;
 import org.apache.cassandra.cdc.CdcTests;
 import org.apache.cassandra.cdc.api.CommitLog;
+import org.apache.cassandra.cdc.api.CommitLogInstance;
 import org.apache.cassandra.cdc.api.CommitLogMarkers;
 import org.apache.cassandra.cdc.api.Marker;
 import org.apache.cassandra.cdc.stats.CdcStats;
@@ -44,29 +49,26 @@ import org.apache.cassandra.spark.utils.TimeProvider;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.cassandra.cdc.CdcTests.BRIDGE;
-import static org.apache.cassandra.cdc.CdcTests.CDC_BRIDGE;
-import static org.apache.cassandra.cdc.CdcTests.directory;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class BufferingCommitLogReaderTests
 {
-    static
+    @ParameterizedTest
+    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    public void testReaderSeek(CassandraVersion version)
     {
-        CdcTests.setup();
-    }
-
-    @Test
-    public void testReaderSeek()
-    {
-        TestSchema schema = TestSchema.builder(BRIDGE)
-                                      .withPartitionKey("pk", BRIDGE.bigint())
-                                      .withColumn("c1", BRIDGE.bigint())
-                                      .withColumn("c2", BRIDGE.bigint())
+        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
+        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
+        Path directory = CdcBridgeProvider.getCommitLogDir(version);
+        CommitLogInstance commitLog = cdcBridge.createCommitLogInstance(directory);
+        TestSchema schema = TestSchema.builder(bridge)
+                                      .withPartitionKey("pk", bridge.bigint())
+                                      .withColumn("c1", bridge.bigint())
+                                      .withColumn("c2", bridge.bigint())
                                       .withCdc(true)
                                       .build();
         CqlTable cqlTable = schema.buildTable();
-        BRIDGE.buildSchema(cqlTable.createStatement(),
+        bridge.buildSchema(cqlTable.createStatement(),
                            cqlTable.keyspace(),
                            ReplicationFactor.simpleStrategy(1),
                            Partitioner.Murmur3Partitioner,
@@ -84,9 +86,9 @@ public class BufferingCommitLogReaderTests
                 row = schema.randomRow();
             }
             keys.add(row.getLong("pk"));
-            CDC_BRIDGE.log(TimeProvider.DEFAULT, cqlTable, CdcTester.testCommitLog, row, TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis()));
+            cdcBridge.log(TimeProvider.DEFAULT, cqlTable, commitLog, row, TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis()));
         }
-        CdcTester.testCommitLog.sync();
+        commitLog.sync();
 
         List<Marker> markers = Collections.synchronizedList(new ArrayList<>());
         CommitLog firstLog = CdcTests.logProvider(directory)
@@ -96,7 +98,7 @@ public class BufferingCommitLogReaderTests
 
         // read entire commit log and verify correct
         Consumer<Marker> listener = markers::add;
-        Set<Long> allRows = readLog(CDC_BRIDGE, null, keys, firstLog, listener);
+        Set<Long> allRows = readLog(cdcBridge, null, keys, firstLog, listener);
         assertThat(allRows).hasSize(numRows);
 
         // re-read commit log from each watermark position
@@ -108,7 +110,7 @@ public class BufferingCommitLogReaderTests
         assertThat(allMarkers).isNotEmpty();
         for (Marker marker : allMarkers)
         {
-            Set<Long> result = readLog(CDC_BRIDGE, marker, keys, firstLog, null);
+            Set<Long> result = readLog(cdcBridge, marker, keys, firstLog, null);
             assertThat(result.size()).isLessThan(foundRows);
             foundRows = result.size();
             if (prevMarker != null)
