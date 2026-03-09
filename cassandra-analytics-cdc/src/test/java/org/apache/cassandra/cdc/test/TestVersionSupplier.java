@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.cdc;
+package org.apache.cassandra.cdc.test;
 
 import java.util.Arrays;
 import java.util.stream.Stream;

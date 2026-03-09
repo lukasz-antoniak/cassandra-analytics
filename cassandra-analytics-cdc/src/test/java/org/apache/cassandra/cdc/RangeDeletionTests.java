@@ -19,7 +19,6 @@
 
 package org.apache.cassandra.cdc;
 
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +37,7 @@ import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.api.RangeTombstoneData;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.RangeTombstone;
+import org.apache.cassandra.cdc.test.CdcTestBase;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.ComparisonUtils;
 import org.apache.cassandra.spark.utils.test.TestSchema;
@@ -47,14 +47,12 @@ import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
-public class RangeDeletionTests
+public class RangeDeletionTests extends CdcTestBase
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRangeDeletions(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testRangeDeletions(bridge, cdcBridge,
                            false, // has static
                            1, // num of partition key columns
@@ -78,11 +76,9 @@ public class RangeDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRangeDeletionsWithStatic(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testRangeDeletions(bridge, cdcBridge,
                            true, // has static
                            1, // num of partition key columns
@@ -121,12 +117,11 @@ public class RangeDeletionTests
         Map<Integer, TestSchema.TestRow> rangeTombstones = new HashMap<>();
         long minTimestamp = System.currentTimeMillis();
         int numRows = 1000;
-        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
         qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(
             type ->
-            testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
+            testWith(bridge, cdcBridge, commitLogDir, schemaBuilder.apply(type))
             .withAddLastModificationTime(true)
             .clearWriters()
             .withNumRows(numRows)

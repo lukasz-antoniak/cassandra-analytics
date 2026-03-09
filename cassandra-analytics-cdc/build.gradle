@@ -139,7 +139,7 @@ jar {
 }
 
 test {
-    systemProperty "cassandra.sidecar.versions_to_test", (System.getenv("CASSANDRA_VERSION") ?: "4.0.0")
+    systemProperty "cassandra.sidecar.versions_to_test", (System.getenv("CASSANDRA_VERSION") ?: "4.0.17,5.0.5")
 
     minHeapSize = '1024m'
     maxHeapSize = '3072m'

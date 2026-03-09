@@ -19,7 +19,6 @@
 
 package org.apache.cassandra.cdc;
 
-import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -34,7 +33,7 @@ import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.msg.CdcEvent;
-import org.apache.cassandra.cdc.msg.jdk.JdkMessageConverter;
+import org.apache.cassandra.cdc.test.CdcTestBase;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
@@ -43,14 +42,12 @@ import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
-public class RowDeletionTests
+public class RowDeletionTests extends CdcTestBase
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRowDeletionWithClusteringKeyAndStatic(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testRowDeletion(bridge, cdcBridge,
                         true, // has static
                         true, // has clustering key?
@@ -63,11 +60,9 @@ public class RowDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRowDeletionWithClusteringKeyNoStatic(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testRowDeletion(bridge, cdcBridge,
                         false, // has static
                         true, // has clustering key?
@@ -79,11 +74,9 @@ public class RowDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRowDeletionSimpleSchema(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testRowDeletion(bridge, cdcBridge,
                         false, // has static
                         false, // has clustering key?
@@ -107,11 +100,9 @@ public class RowDeletionTests
         final Random rnd = new Random(1);
         final long minTimestamp = System.currentTimeMillis();
         final int numRows = 1000;
-        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
-        final JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(bridge.getVersion());
         qt().forAll(cql3Type(bridge))
             .checkAssert(
-            type -> testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
+            type -> testWith(bridge, cdcBridge, commitLogDir, schemaBuilder.apply(type))
                     .withAddLastModificationTime(true)
                     .clearWriters()
                     .withNumRows(numRows)

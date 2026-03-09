@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.cassandra.cdc;
+package org.apache.cassandra.cdc.test;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;

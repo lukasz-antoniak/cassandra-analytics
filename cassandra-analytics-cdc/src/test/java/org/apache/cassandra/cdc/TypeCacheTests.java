@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class TypeCacheTests
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testTypeCache(CassandraVersion version)
     {
         TypeCache typeCache = TypeCache.get(version);

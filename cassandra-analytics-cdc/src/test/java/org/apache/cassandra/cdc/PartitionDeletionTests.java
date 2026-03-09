@@ -19,7 +19,6 @@
 
 package org.apache.cassandra.cdc;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -29,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -37,6 +35,7 @@ import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.msg.CdcEvent;
+import org.apache.cassandra.cdc.test.CdcTestBase;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.ComparisonUtils;
 import org.apache.cassandra.spark.utils.test.TestSchema;
@@ -46,14 +45,12 @@ import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
-public class PartitionDeletionTests
+public class PartitionDeletionTests extends CdcTestBase
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testPartitionDeletionWithStaticColumn(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testPartitionDeletion(bridge, cdcBridge,
                               true, // has static columns
                               true, // has clustering key
@@ -67,11 +64,9 @@ public class PartitionDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testPartitionDeletionWithoutCK(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testPartitionDeletion(bridge, cdcBridge,
                               false, // has static columns
                               false, // has clustering key
@@ -85,11 +80,9 @@ public class PartitionDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testPartitionDeletionWithCompositePK(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
         testPartitionDeletion(bridge, cdcBridge,
                               false, // has static columns
                               true, // has clustering key
@@ -119,11 +112,10 @@ public class PartitionDeletionTests
         final Random rnd = new Random(1);
         final long minTimestamp = System.currentTimeMillis();
         final int numRows = 1000;
-        final Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
         qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(type -> {
-                testWith(bridge, cdcBridge, directory, schemaBuilder.apply(type))
+                testWith(bridge, cdcBridge, commitLogDir, schemaBuilder.apply(type))
                 .withAddLastModificationTime(true)
                 .clearWriters()
                 .withNumRows(numRows)

@@ -35,7 +35,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
-import org.apache.cassandra.cdc.CdcBridgeProvider;
+import org.apache.cassandra.cdc.test.CdcBridgeProvider;
 import org.apache.cassandra.cdc.CdcTests;
 import org.apache.cassandra.cdc.api.CommitLog;
 import org.apache.cassandra.cdc.api.CommitLogInstance;
@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class BufferingCommitLogReaderTests
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testReaderSeek(CassandraVersion version)
     {
         CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);

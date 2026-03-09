@@ -20,7 +20,6 @@
 package org.apache.cassandra.cdc;
 
 import java.nio.ByteBuffer;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,16 +39,15 @@ import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.api.CassandraSource;
-import org.apache.cassandra.cdc.api.CdcOptions;
-import org.apache.cassandra.cdc.api.CommitLogInstance;
 import org.apache.cassandra.cdc.api.RangeTombstoneData;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.Value;
 import org.apache.cassandra.cdc.msg.jdk.CdcMessage;
 import org.apache.cassandra.cdc.msg.jdk.Column;
-import org.apache.cassandra.cdc.msg.jdk.JdkMessageConverter;
 import org.apache.cassandra.cdc.msg.jdk.RangeTombstoneMsg;
 import org.apache.cassandra.cdc.state.CdcState;
+import org.apache.cassandra.cdc.test.CdcTestBase;
+import org.apache.cassandra.cdc.test.TestUtils;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.data.CqlTable;
 import org.apache.cassandra.spark.data.ReplicationFactor;
@@ -68,15 +66,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 import static org.quicktheories.generators.SourceDSL.arbitrary;
 
-public class MicroBatchIteratorTests
+public class MicroBatchIteratorTests extends CdcTestBase
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testSetDeletion(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         Map<String, String> deletedValues = new HashMap<>(DEFAULT_NUM_ROWS);
         runTest(
         bridge, cdcBridge,
@@ -102,12 +97,9 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMapDeletion(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         Map<String, String> deletedValues = new HashMap<>(DEFAULT_NUM_ROWS);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
@@ -132,12 +124,9 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRangeTombstone(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
                           .withPartitionKey("a", bridge.uuid())
@@ -183,12 +172,9 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testRowDelete(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
                           .withPartitionKey("a", bridge.timeuuid())
@@ -216,12 +202,9 @@ public class MicroBatchIteratorTests
 
     @SuppressWarnings("unchecked")
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testInserts(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
                           .withPartitionKey("a", bridge.timeuuid())
@@ -250,12 +233,9 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testPartitionDelete(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
                           .withPartitionKey("a", bridge.timeuuid())
@@ -281,21 +261,18 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdateStaticColumnAndValueColumns(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge).zip(arbitrary().enumValues(OperationType.class), Pair::of))
             .checkAssert(cql3TypeAndInsertFlag -> {
                 CqlField.NativeType cqlType = cql3TypeAndInsertFlag._1;
                 OperationType insertOrUpdate = cql3TypeAndInsertFlag._2;
-                testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                 .withPartitionKey("pk", bridge.uuid())
-                                                                 .withClusteringKey("ck", bridge.uuid())
-                                                                 .withStaticColumn("sc", cqlType)
-                                                                 .withColumn("c1", cqlType))
+                testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                    .withPartitionKey("pk", bridge.uuid())
+                                                                    .withClusteringKey("ck", bridge.uuid())
+                                                                    .withStaticColumn("sc", cqlType)
+                                                                    .withColumn("c1", cqlType))
                 .clearWriters()
                 .withWriter(((tester, rows, writer) -> {
                     long timestampMicros = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
@@ -334,12 +311,9 @@ public class MicroBatchIteratorTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdate(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         runTest(bridge, cdcBridge,
                 TestSchema.builder(bridge)
                           .withPartitionKey("a", bridge.timeuuid())
@@ -397,11 +371,11 @@ public class MicroBatchIteratorTests
         void verify(CdcEvent event, Map<String, TestSchema.TestRow> rows, long nowMicros);
     }
 
-    private static void runTest(CassandraBridge bridge,
-                                CdcBridge cdcBridge,
-                                TestSchema.Builder schemaBuilder,
-                                RowGenerator rowGenerator,
-                                TestVerifier verify)
+    private void runTest(CassandraBridge bridge,
+                         CdcBridge cdcBridge,
+                         TestSchema.Builder schemaBuilder,
+                         RowGenerator rowGenerator,
+                         TestVerifier verify)
     {
         String jobId = UUID.randomUUID().toString();
         long nowMicros = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
@@ -417,10 +391,6 @@ public class MicroBatchIteratorTests
                            Collections.emptySet(),
                            null, 0, schema.withCdc);
         schema.setCassandraVersion(bridge.getVersion());
-
-        Path directory = CdcBridgeProvider.getCommitLogDir(bridge.getVersion());
-        CommitLogInstance commitLog = cdcBridge.createCommitLogInstance(directory);
-        CdcOptions cdcOptions = CdcBridgeProvider.getCdcOptions(bridge.getVersion());
 
         try
         {
@@ -441,7 +411,7 @@ public class MicroBatchIteratorTests
                                                                 () -> ImmutableSet.of(schema.keyspace),
                                                                 cdcOptions,
                                                                 ASYNC_EXECUTOR,
-                                                                logProvider(directory)))
+                                                                logProvider(commitLogDir)))
             {
                 while (count < numRows && it.hasNext())
                 {

@@ -53,14 +53,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
-import org.apache.cassandra.bridge.CdcBridgeFactory;
 import org.apache.cassandra.bridge.TokenRange;
-import org.apache.cassandra.cdc.api.CdcOptions;
 import org.apache.cassandra.cdc.api.CommitLog;
-import org.apache.cassandra.cdc.api.CommitLogInstance;
 import org.apache.cassandra.cdc.api.CommitLogProvider;
 import org.apache.cassandra.cdc.api.EventConsumer;
 import org.apache.cassandra.cdc.api.Marker;
@@ -68,8 +64,8 @@ import org.apache.cassandra.cdc.api.SchemaSupplier;
 import org.apache.cassandra.cdc.api.StatePersister;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.Value;
-import org.apache.cassandra.cdc.msg.jdk.JdkMessageConverter;
 import org.apache.cassandra.cdc.state.CdcState;
+import org.apache.cassandra.cdc.test.CdcTestBase;
 import org.apache.cassandra.db.marshal.ByteBufferAccessor;
 import org.apache.cassandra.serializers.CollectionSerializer;
 import org.apache.cassandra.spark.data.CqlField;
@@ -99,7 +95,7 @@ import static org.quicktheories.QuickTheory.qt;
 import static org.quicktheories.generators.SourceDSL.arbitrary;
 
 @SuppressWarnings("DataFlowIssue")
-public class CdcTests
+public class CdcTests extends CdcTestBase
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(CdcTests.class);
     public static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4,
@@ -152,13 +148,9 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMockedCdc(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path commitLogDir = CdcBridgeProvider.getCommitLogDir(version);
-        CommitLogInstance commitLog = cdcBridge.createCommitLogInstance(commitLogDir);
         try
         {
             Set<String> seenMutations = ConcurrentHashMap.newKeySet();
@@ -224,7 +216,7 @@ public class CdcTests
                               .withStatePersister(statePersister)
                               .withTableIdLookup(cdcBridge.internalTableIdLookup())
                               .withCommitLogProvider(CdcTests.logProvider(commitLogDir))
-                              .withCdcOptions(CdcBridgeProvider.getCdcOptions(version))
+                              .withCdcOptions(cdcOptions)
                               .build())
             {
                 cdc.start();
@@ -274,12 +266,9 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testSinglePartitionKey(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path commitLogDir = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .checkAssert(type ->
                          testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
@@ -304,20 +293,17 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testClusteringKey(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(type ->
-                         testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                          .withPartitionKey("pk", bridge.uuid())
-                                                                          .withClusteringKey("ck", type)
-                                                                          .withColumn("c1", bridge.bigint())
-                                                                          .withColumn("c2", bridge.text()))
+                         testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                             .withPartitionKey("pk", bridge.uuid())
+                                                                             .withClusteringKey("ck", type)
+                                                                             .withColumn("c1", bridge.bigint())
+                                                                             .withColumn("c2", bridge.text()))
                          .withCdcEventChecker((testRows, events) -> {
                              for (CdcEvent event : events)
                              {
@@ -337,25 +323,22 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMultipleClusteringKeys(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().withExamples(50).forAll(cql3Type(bridge), cql3Type(bridge), cql3Type(bridge))
             .assuming((t1, t2, t3) -> t1.supportedAsPrimaryKeyColumn()
                                       && t2.supportedAsPrimaryKeyColumn()
                                       && t3.supportedAsPrimaryKeyColumn())
             .checkAssert(
             (t1, t2, t3) ->
-            testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                             .withPartitionKey("pk", bridge.uuid())
-                                                             .withClusteringKey("ck1", t1)
-                                                             .withClusteringKey("ck2", t2)
-                                                             .withClusteringKey("ck3", t3)
-                                                             .withColumn("c1", bridge.bigint())
-                                                             .withColumn("c2", bridge.text()))
+            testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                .withPartitionKey("pk", bridge.uuid())
+                                                                .withClusteringKey("ck1", t1)
+                                                                .withClusteringKey("ck2", t2)
+                                                                .withClusteringKey("ck3", t3)
+                                                                .withColumn("c1", bridge.bigint())
+                                                                .withColumn("c2", bridge.text()))
             .withCdcEventChecker((testRows, events) -> {
                 for (CdcEvent event : events)
                 {
@@ -378,19 +361,16 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testSet(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsSetElement)
             .checkAssert(
-            t -> testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                  .withPartitionKey("pk", bridge.uuid())
-                                                                  .withColumn("c1", bridge.bigint())
-                                                                  .withColumn("c2", bridge.set(t)))
+            t -> testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                     .withPartitionKey("pk", bridge.uuid())
+                                                                     .withColumn("c1", bridge.bigint())
+                                                                     .withColumn("c2", bridge.set(t)))
                  .withCdcEventChecker((testRows, events) -> {
                      for (CdcEvent event : events)
                      {
@@ -417,19 +397,16 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testList(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .checkAssert(
             t ->
-            testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                             .withPartitionKey("pk", bridge.uuid())
-                                                             .withColumn("c1", bridge.bigint())
-                                                             .withColumn("c2", bridge.list(bridge.aInt())))
+            testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                .withPartitionKey("pk", bridge.uuid())
+                                                                .withColumn("c1", bridge.bigint())
+                                                                .withColumn("c2", bridge.list(bridge.aInt())))
             .withCassandraSource((keyspace, table, columnsToFetch, primaryKeyColumns) -> {
                 // mutations to unfrozen lists require reading the full list from Cassandra
                 List<ByteBuffer> byteBuffers = new ArrayList<>();
@@ -465,19 +442,16 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMap(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().withExamples(50).forAll(cql3Type(bridge), cql3Type(bridge))
             .assuming((t1, t2) -> t1.supportedAsMapKey() && t2.supportedAsMapKey())
             .checkAssert(
-            (t1, t2) -> testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                         .withPartitionKey("pk", bridge.uuid())
-                                                                         .withColumn("c1", bridge.bigint())
-                                                                         .withColumn("c2", bridge.map(t1, t2)))
+            (t1, t2) -> testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                            .withPartitionKey("pk", bridge.uuid())
+                                                                            .withColumn("c1", bridge.bigint())
+                                                                            .withColumn("c2", bridge.map(t1, t2)))
                         .withCdcEventChecker((testRows, events) -> {
                             for (CdcEvent event : events)
                             {
@@ -509,12 +483,9 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMultiTable(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         TestSchema.Builder tableBuilder1 = TestSchema.builder(bridge)
                                                      .withPartitionKey("pk", bridge.uuid())
                                                      .withClusteringKey("ck1", bridge.text())
@@ -552,7 +523,7 @@ public class CdcTests
         int numRows = DEFAULT_NUM_ROWS;
 
         AtomicReference<TestSchema> schema1Holder = new AtomicReference<>();
-        CdcTester.Builder testBuilder = CdcTester.builder(bridge, cdcBridge, tableBuilder1, directory)
+        CdcTester.Builder testBuilder = CdcTester.builder(bridge, cdcBridge, tableBuilder1, commitLogDir)
                                                  .clearWriters()
                                                  .withWriter((tester, rows, writer) -> {
                                                      for (int i = 0; i < numRows; i++)
@@ -619,20 +590,17 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdateStaticColumnOnly(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge).zip(arbitrary().enumValues(OperationType.class), Pair::of))
             .checkAssert(cql3TypeAndInsertFlag -> {
                 CqlField.NativeType cqlType = cql3TypeAndInsertFlag._1;
                 OperationType insertOrUpdate = cql3TypeAndInsertFlag._2;
-                testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                 .withPartitionKey("pk", bridge.uuid())
-                                                                 .withClusteringKey("ck", bridge.uuid())
-                                                                 .withStaticColumn("sc", cqlType))
+                testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                    .withPartitionKey("pk", bridge.uuid())
+                                                                    .withClusteringKey("ck", bridge.uuid())
+                                                                    .withStaticColumn("sc", cqlType))
                 .clearWriters()
                 .withWriter(((tester, rows, writer) -> {
                     long timestampMicros = TimeUnit.MILLISECONDS.toMicros(System.currentTimeMillis());
@@ -665,22 +633,18 @@ public class CdcTests
 
     // Test mutations that partially update are correctly reflected in the cdc event.
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdatePartialColumns(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
-        JdkMessageConverter messageConverter = CdcBridgeProvider.getMessageConverter(version);
         Set<UUID> ttlRowIdx = new HashSet<>();
         Random rnd = new Random(1);
         qt().forAll(cql3Type(bridge))
             .checkAssert(type -> {
                 ttlRowIdx.clear();
-                testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                 .withPartitionKey("pk", bridge.uuid())
-                                                                 .withColumn("c1", bridge.bigint())
-                                                                 .withColumn("c2", type))
+                testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                    .withPartitionKey("pk", bridge.uuid())
+                                                                    .withColumn("c1", bridge.bigint())
+                                                                    .withColumn("c2", type))
                 .clearWriters()
                 .withAddLastModificationTime(true)
                 .withWriter((tester, rows, writer) -> {
@@ -726,22 +690,19 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testCellDeletion(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         // The test write cell-level tombstones,
         // i.e. deleting one or more columns in a row, for cdc job to aggregate.
         qt().forAll(cql3Type(bridge))
             .checkAssert(
             type ->
-            testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                             .withPartitionKey("pk", bridge.uuid())
-                                                             .withColumn("c1", bridge.bigint())
-                                                             .withColumn("c2", type)
-                                                             .withColumn("c3", bridge.list(type)))
+            testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                .withPartitionKey("pk", bridge.uuid())
+                                                                .withColumn("c1", bridge.bigint())
+                                                                .withColumn("c2", type)
+                                                                .withColumn("c3", bridge.list(type)))
             .clearWriters()
             .withWriter((tester, rows, writer) -> {
                 for (int i = 0; i < tester.numRows; i++)
@@ -773,22 +734,19 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testCompositePartitionKey(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .assuming(CqlField.CqlType::supportedAsPrimaryKeyColumn)
             .checkAssert(
             type ->
-            testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                             .withPartitionKey("pk1", bridge.uuid())
-                                                             .withPartitionKey("pk2", type)
-                                                             .withPartitionKey("pk3", bridge.timestamp())
-                                                             .withColumn("c1", bridge.bigint())
-                                                             .withColumn("c2", bridge.text()))
+            testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                .withPartitionKey("pk1", bridge.uuid())
+                                                                .withPartitionKey("pk2", type)
+                                                                .withPartitionKey("pk3", bridge.timestamp())
+                                                                .withColumn("c1", bridge.bigint())
+                                                                .withColumn("c2", bridge.text()))
             .withCdcEventChecker((testRows, events) -> {
                 for (CdcEvent event : events)
                 {
@@ -808,19 +766,16 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdateFlag(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().withExamples(10)
             .forAll(cql3Type(bridge))
             .checkAssert(type -> {
-                testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                 .withPartitionKey("pk", bridge.uuid())
-                                                                 .withColumn("c1", bridge.aInt())
-                                                                 .withColumn("c2", type))
+                testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                    .withPartitionKey("pk", bridge.uuid())
+                                                                    .withColumn("c1", bridge.aInt())
+                                                                    .withColumn("c2", type))
                 .clearWriters()
                 .withNumRows(1000)
                 .withWriter((tester, rows, writer) -> {
@@ -862,21 +817,18 @@ public class CdcTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testMultipleWritesToSameKeyInBatch(CassandraVersion version)
     {
         // The test writes different groups of mutations.
         // Each group of mutations write to the same key with the different timestamp.
         // For CDC, it only deduplicate and emit the replicated mutations, i.e. they have the same writetime.
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         qt().forAll(cql3Type(bridge))
             .checkAssert(type -> {
-                testWith(bridge, cdcBridge, directory, TestSchema.builder(bridge)
-                                                                 .withPartitionKey("pk", bridge.uuid())
-                                                                 .withColumn("c1", bridge.bigint())
-                                                                 .withColumn("c2", type))
+                testWith(bridge, cdcBridge, commitLogDir, TestSchema.builder(bridge)
+                                                                    .withPartitionKey("pk", bridge.uuid())
+                                                                    .withColumn("c1", bridge.bigint())
+                                                                    .withColumn("c2", type))
                 .clearWriters()
                 .withNumRows(1000)
                 .withExpectedNumRows(2000)

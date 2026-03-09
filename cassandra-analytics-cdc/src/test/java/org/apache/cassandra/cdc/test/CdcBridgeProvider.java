@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.cassandra.cdc;
+package org.apache.cassandra.cdc.test;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -43,11 +43,18 @@ public class CdcBridgeProvider
     private static final ConcurrentMap<CassandraVersion, CdcBridge> CDC_BRIDGES = new ConcurrentHashMap<>();
     private static final ConcurrentMap<CassandraVersion, JdkMessageConverter> MESSAGE_CONVERTERS = new ConcurrentHashMap<>();
 
-    static {
+    static
+    {
         setup();
     }
 
-    private static void setup() {
+    private CdcBridgeProvider()
+    {
+        throw new IllegalStateException(getClass() + " is static utility class and shall not be instantiated");
+    }
+
+    private static void setup()
+    {
         TestVersionSupplier.testVersions().forEach(v -> {
             try
             {

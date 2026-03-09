@@ -39,6 +39,8 @@ import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.bridge.CdcBridge;
 import org.apache.cassandra.cdc.msg.CdcEvent;
 import org.apache.cassandra.cdc.msg.Value;
+import org.apache.cassandra.cdc.test.CdcTestBase;
+import org.apache.cassandra.cdc.test.TestUtils;
 import org.apache.cassandra.spark.data.CqlField;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 
@@ -47,17 +49,14 @@ import static org.apache.cassandra.spark.CommonTestUtils.cql3Type;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.quicktheories.QuickTheory.qt;
 
-public class CollectionDeletionTests
+public class CollectionDeletionTests extends CdcTestBase
 {
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testElementDeletionInMap(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         final String name = "m";
-        testElementDeletionInCollection(bridge, cdcBridge, directory, 1, 2, /* numOfColumns */
+        testElementDeletionInCollection(bridge, cdcBridge, commitLogDir, 1, 2, /* numOfColumns */
                                         ImmutableList.of(name),
                                         type -> TestSchema.builder(bridge)
                                                           .withPartitionKey("pk", bridge.uuid())
@@ -65,14 +64,11 @@ public class CollectionDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testElementDeletionInSet(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
         final String name = "s";
-        testElementDeletionInCollection(bridge, cdcBridge, directory, 1, 2, /* numOfColumns */
+        testElementDeletionInCollection(bridge, cdcBridge, commitLogDir, 1, 2, /* numOfColumns */
                                         Arrays.asList(name),
                                         type -> TestSchema.builder(bridge)
                                                           .withPartitionKey("pk", bridge.uuid())
@@ -80,13 +76,10 @@ public class CollectionDeletionTests
     }
 
     @ParameterizedTest
-    @MethodSource("org.apache.cassandra.cdc.TestVersionSupplier#testVersions")
+    @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testElementDeletionsInMultipleColumns(CassandraVersion version)
     {
-        CassandraBridge bridge = CdcBridgeProvider.getCassandraBridge(version);
-        CdcBridge cdcBridge = CdcBridgeProvider.getTestCdcBridge(version);
-        Path directory = CdcBridgeProvider.getCommitLogDir(version);
-        testElementDeletionInCollection(bridge, cdcBridge, directory, 1, 4, /* numOfColumns */
+        testElementDeletionInCollection(bridge, cdcBridge, commitLogDir, 1, 4, /* numOfColumns */
                                         Arrays.asList("c1", "c2", "c3"),
                                         type -> TestSchema.builder(bridge)
                                                           .withPartitionKey("pk", bridge.uuid())
