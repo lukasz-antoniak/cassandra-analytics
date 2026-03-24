@@ -62,6 +62,11 @@ with an optional port number (e.g. `localhost1,localhost2`, `127.0.0.1,127.0.0.2
 |`PKCS12`
 |Truststore type, `PKCS12` or `JKS`
 
+|_ssl_verify_hostname_
+|no
+|`true`
+|Flag to switch hostname verification during SSL handshake
+
 |_cassandra_role_
 |no
 |

@@ -19,6 +19,12 @@
 
 plugins {
     id('java-library')
+    id('maven-publish')
+}
+
+if (propertyWithDefault("artifactType", null) == "spark")
+{
+    apply from: "$rootDir/gradle/common/publishing.gradle"
 }
 
 configurations {

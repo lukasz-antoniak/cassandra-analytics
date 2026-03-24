@@ -29,6 +29,7 @@ public class HttpClientConfig
 {
     public static final long DEFAULT_TIMEOUT_MILLIS = 30_000;
     public static final boolean DEFAULT_SSL = true;
+    public static final boolean DEFAULT_SSL_VERIFY_HOSTNAME = true;
     public static final int DEFAULT_MAX_POOL_SIZE = 20;
     public static final String DEFAULT_USER_AGENT = "sidecar-client/0.1.0";
     public static final int DEFAULT_IDLE_TIMEOUT_MILLIS = 0; // no timeout
@@ -41,6 +42,7 @@ public class HttpClientConfig
 
     private final long timeoutMillis;
     private final boolean ssl;
+    private final boolean sslVerifyHostname;
     private final int maxPoolSize;
     private final String userAgent;
     private final int idleTimeoutMillis;
@@ -59,6 +61,7 @@ public class HttpClientConfig
     {
         timeoutMillis = builder.timeoutMillis;
         ssl = builder.ssl;
+        sslVerifyHostname = builder.sslVerifyHostname;
         maxPoolSize = builder.maxPoolSize;
         userAgent = builder.userAgent;
         idleTimeoutMillis = builder.idleTimeoutMillis;
@@ -88,6 +91,14 @@ public class HttpClientConfig
     public boolean ssl()
     {
         return ssl;
+    }
+
+    /**
+     * @return true if SSL hostname verification should be enabled, false otherwise
+     */
+    public boolean sslVerifyHostname()
+    {
+        return sslVerifyHostname;
     }
 
     /**
@@ -201,6 +212,7 @@ public class HttpClientConfig
     {
         private long timeoutMillis = DEFAULT_TIMEOUT_MILLIS;
         private boolean ssl = DEFAULT_SSL;
+        private boolean sslVerifyHostname = DEFAULT_SSL_VERIFY_HOSTNAME;
         private int maxPoolSize = DEFAULT_MAX_POOL_SIZE;
         public int idleTimeoutMillis = DEFAULT_IDLE_TIMEOUT_MILLIS;
         private String userAgent = DEFAULT_USER_AGENT;
@@ -247,6 +259,19 @@ public class HttpClientConfig
         public T ssl(boolean ssl)
         {
             this.ssl = ssl;
+            return self();
+        }
+
+        /**
+         * Sets the {@code sslVerifyHostname} and returns a reference to this Builder enabling method chaining.
+         * Defaults to {@code true}.
+         *
+         * @param sslVerifyHostname the {@code sslVerifyHostname} to set
+         * @return a reference to this Builder
+         */
+        public T sslVerifyHostname(boolean sslVerifyHostname)
+        {
+            this.sslVerifyHostname = sslVerifyHostname;
             return self();
         }
 
