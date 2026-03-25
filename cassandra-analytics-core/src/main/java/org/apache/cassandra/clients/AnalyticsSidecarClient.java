@@ -57,6 +57,7 @@ public class AnalyticsSidecarClient
                                             .trustStorePassword(conf.getTrustStorePasswordOrDefault())
                                             .trustStoreType(conf.getTrustStoreTypeOrDefault())
                                             .ssl(conf.hasKeystoreAndKeystorePassword())
+                                            .sslVerifyHostname(conf.getSslVerifyHostname())
                                             .cassandraRole(conf.getCassandraRole())
                                             .build();
 

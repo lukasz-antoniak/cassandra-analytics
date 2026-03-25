@@ -41,6 +41,7 @@ public class SslConfig implements Serializable
 {
     private static final long serialVersionUID = -3844712192096436932L;
     private static final Logger LOGGER = LoggerFactory.getLogger(SslConfig.class);
+    public static final String SSL_VERIFY_HOSTNAME = "SSL_VERIFY_HOSTNAME";
     public static final String SECRETS_PATH = "SECRETS_PATH";
     public static final String KEYSTORE_PATH = "KEYSTORE_PATH";
     public static final String KEYSTORE_BASE64_ENCODED = "KEYSTORE_BASE64_ENCODED";
@@ -53,6 +54,7 @@ public class SslConfig implements Serializable
     public static final String TRUSTSTORE_TYPE = "TRUSTSTORE_TYPE";
     public static final String DEFAULT_TRUSTSTORE_TYPE = "JKS";
 
+    protected boolean sslVerifyHostname;
     protected String secretsPath;
     protected String keyStorePath;
     protected String base64EncodedKeyStore;
@@ -65,6 +67,7 @@ public class SslConfig implements Serializable
 
     protected SslConfig(Builder<?> builder)
     {
+        sslVerifyHostname = builder.sslVerifyHostname;
         secretsPath = builder.secretsPath;
         keyStorePath = builder.keyStorePath;
         base64EncodedKeyStore = builder.base64EncodedKeyStore;
@@ -74,6 +77,14 @@ public class SslConfig implements Serializable
         base64EncodedTrustStore = builder.base64EncodedTrustStore;
         trustStorePassword = builder.trustStorePassword;
         trustStoreType = builder.trustStoreType;
+    }
+
+    /**
+     * @return whether to perform SSL hostname verification
+     */
+    public boolean sslVerifyHostname()
+    {
+        return sslVerifyHostname;
     }
 
     /**
@@ -153,6 +164,7 @@ public class SslConfig implements Serializable
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException
     {
         LOGGER.debug("Falling back to JDK deserialization");
+        this.sslVerifyHostname = readBoolean(in);
         this.secretsPath = readNullableString(in);
         this.keyStorePath = readNullableString(in);
         this.base64EncodedKeyStore = readNullableString(in);
@@ -167,6 +179,7 @@ public class SslConfig implements Serializable
     private void writeObject(ObjectOutputStream out) throws IOException
     {
         LOGGER.debug("Falling back to JDK serialization");
+        writeBoolean(out, sslVerifyHostname);
         writeNullableString(out, secretsPath);
         writeNullableString(out, keyStorePath);
         writeNullableString(out, base64EncodedKeyStore);
@@ -178,9 +191,19 @@ public class SslConfig implements Serializable
         writeNullableString(out, trustStoreType);
     }
 
+    private boolean readBoolean(ObjectInputStream in) throws IOException
+    {
+        return in.readBoolean();
+    }
+
     private String readNullableString(ObjectInputStream in) throws IOException
     {
         return in.readBoolean() ? in.readUTF() : null;
+    }
+
+    private void writeBoolean(ObjectOutputStream out, boolean value) throws IOException
+    {
+        out.writeBoolean(value);
     }
 
     private void writeNullableString(ObjectOutputStream out, String string) throws IOException
@@ -203,6 +226,7 @@ public class SslConfig implements Serializable
         public SslConfig read(Kryo kryo, Input in, Class type)
         {
             return new Builder<>()
+                   .sslVerifyHostname(in.readBoolean())
                    .secretsPath(in.readString())
                    .keyStorePath(in.readString())
                    .base64EncodedKeyStore(in.readString())
@@ -217,6 +241,7 @@ public class SslConfig implements Serializable
 
         public void write(Kryo kryo, Output out, SslConfig config)
         {
+            out.writeBoolean(config.sslVerifyHostname);
             out.writeString(config.secretsPath);
             out.writeString(config.keyStorePath);
             out.writeString(config.base64EncodedKeyStore);
@@ -232,6 +257,7 @@ public class SslConfig implements Serializable
     @Nullable
     public static SslConfig create(Map<String, String> options)
     {
+        boolean sslVerifyHostname = MapUtils.getBoolean(options, SSL_VERIFY_HOSTNAME, true);
         String secretsPath = MapUtils.getOrDefault(options, SECRETS_PATH, null);
         String keyStorePath = MapUtils.getOrDefault(options, KEYSTORE_PATH, null);
         String encodedKeyStore = MapUtils.getOrDefault(options, KEYSTORE_BASE64_ENCODED, null);
@@ -254,6 +280,7 @@ public class SslConfig implements Serializable
             || trustStoreType != null)
         {
             Builder<?> validatedConfig = new Builder<>()
+                                         .sslVerifyHostname(sslVerifyHostname)
                                          .secretsPath(secretsPath)
                                          .keyStorePath(keyStorePath)
                                          .base64EncodedKeyStore(encodedKeyStore)
@@ -279,6 +306,7 @@ public class SslConfig implements Serializable
      */
     public static class Builder<T extends SslConfig.Builder<T>>
     {
+        protected boolean sslVerifyHostname;
         protected String secretsPath;
         protected String keyStorePath;
         protected String base64EncodedKeyStore;
@@ -403,6 +431,18 @@ public class SslConfig implements Serializable
         public T trustStoreType(String trustStoreType)
         {
             this.trustStoreType = trustStoreType;
+            return self();
+        }
+
+        /**
+         * Sets the {@code sslVerifyHostname} and returns a reference to this Builder enabling method chaining
+         *
+         * @param sslVerifyHostname the {@code sslVerifyHostname} to set
+         * @return a reference to this Builder
+         */
+        public T sslVerifyHostname(boolean sslVerifyHostname)
+        {
+            this.sslVerifyHostname = sslVerifyHostname;
             return self();
         }
 

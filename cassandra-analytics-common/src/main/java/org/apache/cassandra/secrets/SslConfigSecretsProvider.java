@@ -189,6 +189,12 @@ public class SslConfigSecretsProvider implements SecretsProvider
     }
 
     @Override
+    public boolean sslVerifyHostname()
+    {
+        return config.sslVerifyHostname();
+    }
+
+    @Override
     public String toString()
     {
         return "SecretsConfigProvider{"

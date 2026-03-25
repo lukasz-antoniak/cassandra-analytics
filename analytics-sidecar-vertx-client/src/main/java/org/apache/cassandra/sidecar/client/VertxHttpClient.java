@@ -309,7 +309,9 @@ public class VertxHttpClient implements HttpClient
             return options;
         }
 
-        options = options.setSsl(true);
+        options = options
+                  .setSsl(true)
+                  .setVerifyHost(config.sslVerifyHostname());
 
         if (config.trustStoreInputStream() != null && config.trustStorePassword() != null)
         {

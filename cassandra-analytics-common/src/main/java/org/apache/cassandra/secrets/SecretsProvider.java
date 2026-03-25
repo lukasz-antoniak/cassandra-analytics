@@ -105,4 +105,12 @@ public interface SecretsProvider
      * @return the path for the secrets directory
      */
     Path secretsPath();
+
+    /**
+     * @return {@code true} when hostname shall be verified during SSL handshake
+     */
+    default boolean sslVerifyHostname()
+    {
+        return true;
+    }
 }
