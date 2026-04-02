@@ -195,16 +195,16 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
                 // otherwise read() blocks waiting for FINISHED_MARKER
                 queue.add(FINISHED_MARKER);
             }
-            return;  // Finished
+            return; // Finished
         }
 
         long chunkSize = rangeStart == 0 ? source.headerChunkSize() : source.chunkBufferSize();
-        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize);
+        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize) - 1;
         if (rangeEnd >= rangeStart)
         {
             activeRequest = true;
             source.request(rangeStart, rangeEnd, this);
-            rangeStart += chunkSize + 1;  // Increment range start pointer for next request
+            rangeStart += chunkSize; // Increment range start pointer for next request
         }
         else
         {
