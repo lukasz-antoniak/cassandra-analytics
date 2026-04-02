@@ -54,6 +54,7 @@ import org.jetbrains.annotations.NotNull;
 @SuppressWarnings({"WeakerAccess", "unused"})
 public class BufferingInputStream<T extends CassandraFile> extends InputStream implements StreamConsumer
 {
+    // END_MARKER indicates the end of chunk, not the end of the file
     private static final StreamBuffer.ByteArrayWrapper END_MARKER = StreamBuffer.wrap(ByteBufferUtils.EMPTY);
     private static final StreamBuffer.ByteArrayWrapper FINISHED_MARKER = StreamBuffer.wrap(ByteBufferUtils.EMPTY);
     private static final StreamBuffer.ByteArrayWrapper ERROR_MARKER = StreamBuffer.wrap(ByteBufferUtils.EMPTY);
@@ -61,10 +62,10 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
     private enum StreamState
     {
         Init,
-        Reading,
-        NextBuffer,
-        End,
-        Closed
+        Reading,    // we have received next chunk and it is being read
+        NextBuffer, // we are going to read next buffer
+        End,        // indicates we reached the end of the stream
+        Closed      // input stream is closed
     }
 
     private final BlockingQueue<StreamBuffer> queue;
@@ -195,16 +196,16 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
                 // otherwise read() blocks waiting for FINISHED_MARKER
                 queue.add(FINISHED_MARKER);
             }
-            return;  // Finished
+            return; // Finished
         }
 
         long chunkSize = rangeStart == 0 ? source.headerChunkSize() : source.chunkBufferSize();
-        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize);
+        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize) - 1; // start and end range are inclusive
         if (rangeEnd >= rangeStart)
         {
             activeRequest = true;
             source.request(rangeStart, rangeEnd, this);
-            rangeStart += chunkSize + 1;  // Increment range start pointer for next request
+            rangeStart += chunkSize; // Increment range start pointer for next request
         }
         else
         {
