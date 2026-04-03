@@ -408,6 +408,7 @@ public class BufferingInputStreamTests
             {
                 ByteBuffer buffer = ByteBuffer.allocate(chunkSize);
                 int read = stream2.read(buffer); // read last full chunk
+                assertThat(returnedBuffers).hasSize(2);
                 assertThat(read).isEqualTo(chunkSize);
                 assertThat(buffer.array()).isEqualTo(returnedBuffers.get(0));
 
