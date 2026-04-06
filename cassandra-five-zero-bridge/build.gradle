@@ -21,6 +21,12 @@ import java.nio.file.Paths
 
 plugins {
     id('java-library')
+    id('maven-publish')
+}
+
+if (propertyWithDefault("artifactType", null) == "common")
+{
+    apply from: "$rootDir/gradle/common/publishing.gradle"
 }
 
 configurations {

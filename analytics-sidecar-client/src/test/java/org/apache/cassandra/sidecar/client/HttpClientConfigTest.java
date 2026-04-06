@@ -68,6 +68,15 @@ class HttpClientConfigTest
     }
 
     @Test
+    void testBuilderSslVerifyHostname()
+    {
+        HttpClientConfig config = new HttpClientConfig.Builder<>().ssl(true).sslVerifyHostname(true).build();
+        assertThat(config.sslVerifyHostname()).isTrue();
+        config = new HttpClientConfig.Builder<>().ssl(true).sslVerifyHostname(false).build();
+        assertThat(config.sslVerifyHostname()).isFalse();
+    }
+
+    @Test
     void testMaxPoolSize()
     {
         HttpClientConfig config = new HttpClientConfig.Builder<>().maxPoolSize(120).build();

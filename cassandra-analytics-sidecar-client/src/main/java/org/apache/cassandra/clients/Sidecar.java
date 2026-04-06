@@ -99,6 +99,7 @@ public final class Sidecar
         {
             builder = builder
                       .ssl(true)
+                      .sslVerifyHostname(secretsProvider.sslVerifyHostname())
                       .keyStoreInputStream(secretsProvider.keyStoreInputStream())
                       .keyStorePassword(String.valueOf(secretsProvider.keyStorePassword()))
                       .keyStoreType(secretsProvider.keyStoreType())
