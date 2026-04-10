@@ -27,12 +27,12 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.datastax.driver.core.BoundStatement;
-import com.datastax.driver.core.PreparedStatement;
-import com.datastax.driver.core.ResultSet;
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.Session;
-import com.datastax.driver.core.Statement;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.Statement;
 import org.apache.cassandra.bridge.CassandraTypesImplementation;
 import org.apache.cassandra.cdc.msg.Value;
 import org.apache.cassandra.spark.data.CassandraTypes;
@@ -80,9 +80,9 @@ public class CassandraClientSourceTest
     }
 
     // mock session that returns 100 on execution of query
-    private static Session getMockSession()
+    private static CqlSession getMockSession()
     {
-        Session session = mock(Session.class);
+        CqlSession session = mock(CqlSession.class);
         // mock row
         Row row = mock(Row.class);
         when(row.getBytesUnsafe(anyString())).thenReturn(TYPES.aInt().serialize(100));

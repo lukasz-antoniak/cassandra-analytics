@@ -42,7 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import com.datastax.driver.core.utils.UUIDs;
+import com.datastax.oss.driver.api.core.uuid.Uuids;
 import org.apache.cassandra.bridge.type.InternalDuration;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.spark.bulkwriter.SqlToCqlTypeConverter;
@@ -451,7 +451,7 @@ class BulkWriteDataTypesTest extends SharedClusterSparkIntegrationTestBase
     static final Function<Integer, Object> LONG_MAPPER = recordNumber -> (long) recordNumber;
     static final Function<Integer, Object> STRING_MAPPER = recordNumber -> "course" + recordNumber;
     static final Function<Integer, Object> BINARY_MAPPER = recordNumber -> ("course" + recordNumber).getBytes(StandardCharsets.UTF_8);
-    static final Function<Integer, Object> TIME_UUID_MAPPER = recordNumber -> UUIDs.timeBased().toString();
+    static final Function<Integer, Object> TIME_UUID_MAPPER = recordNumber -> Uuids.timeBased().toString();
     static final Function<Integer, Object> RANDOM_UUID_MAPPER = recordNumber -> UUID.randomUUID().toString();
     static final Function<Integer, Object> TIMESTAMP_MAPPER
     = recordNumber -> Timestamp.from(new Date(1731457509115L).toInstant().plus(recordNumber, ChronoUnit.SECONDS));

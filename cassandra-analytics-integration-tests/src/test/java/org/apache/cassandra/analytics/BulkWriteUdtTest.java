@@ -21,7 +21,8 @@ package org.apache.cassandra.analytics;
 
 import java.util.Objects;
 import java.util.function.Predicate;
-import com.datastax.driver.core.UDTValue;
+
+import com.datastax.oss.driver.api.core.data.UdtValue;
 import org.apache.cassandra.distributed.api.ICoordinator;
 import org.junit.jupiter.api.Test;
 
@@ -385,9 +386,9 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
     }
 
     @NotNull
-    public static String udtRowFormatter(com.datastax.driver.core.Row row)
+    public static String udtRowFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
-        UDTValue udt = row.getUDTValue(1);
+        UdtValue udt = row.getUdtValue(1);
         return row.getLong(0) +
                ":" +
                Objects.requireNonNullElse(udt, "null").toString()
@@ -398,11 +399,11 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
     }
 
     @NotNull
-    public static String listOfUdtRowFormatter(com.datastax.driver.core.Row row)
+    public static String listOfUdtRowFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
         return row.getLong(0) +
                ":" +
-               row.getList(1, UDTValue.class).toString()
+               row.getList(1, UdtValue.class).toString()
                   // empty collections have different formatting between driver and spark
                   .replace("{}", "null")
                   .replace("[]", "null")
@@ -413,13 +414,13 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
     }
 
     @NotNull
-    public static String setOfUdtRowFormatter(com.datastax.driver.core.Row row)
+    public static String setOfUdtRowFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
         // Formats as field:value with no whitespaces, and strings quoted
         // Driver Codec writes "NULL" for null value. Spark DF writes "null".
         return row.getLong(0) +
                ":" +
-               row.getSet(1, UDTValue.class).toString()
+               row.getSet(1, UdtValue.class).toString()
                   // empty collections have different formatting between driver and spark
                   .replace("{}", "null")
                   .replace("[]", "null")
@@ -430,13 +431,13 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
     }
 
     @NotNull
-    public static String mapOfUdtRowFormatter(com.datastax.driver.core.Row row)
+    public static String mapOfUdtRowFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
         // Formats as field:value with no whitespaces, and strings quoted
         // Driver Codec writes "NULL" for null value. Spark DF writes "null".
         return row.getLong(0) +
                ":" +
-               row.getMap(1, UDTValue.class, UDTValue.class).toString()
+               row.getMap(1, UdtValue.class, UdtValue.class).toString()
                   // empty collections have different formatting between driver and spark
                   .replace("{}", "null")
                   .replace("[]", "null")

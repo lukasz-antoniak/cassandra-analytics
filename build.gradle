@@ -190,6 +190,10 @@ subprojects {
     mavenLocal {
       url Paths.get(dependencyLocation)
     }
+    // TODO(lantoniak): Only applicable for Java driver upgrade.
+    maven {
+      url = "file:///Users/lukasz.antoniak/.m2/repository"
+    }
   }
 
   dependencies {

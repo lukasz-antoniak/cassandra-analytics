@@ -76,7 +76,7 @@ dependencies {
     implementation project(':cassandra-analytics-cdc')
     implementation project(":cassandra-analytics-cdc-codec")
     implementation project(':cassandra-analytics-sidecar-client')
-    compileOnlyApi("com.datastax.cassandra:cassandra-driver-core:${project.cassandraDriverVersion}") // Cassandra driver is required only if user supplies the CassandraClientSource
+    compileOnlyApi("org.apache.cassandra:java-driver-core:${project.cassandraDriverVersion}") // Cassandra driver is required only if user supplies the CassandraClientSource
 
     implementation "com.google.guava:guava:${project.guavaVersion}"
 
@@ -91,7 +91,7 @@ dependencies {
 
     // pull in cassandra-bridge so we can re-use TestSchema to generate arbitrary schemas for the cdc tests
     testImplementation project(":cassandra-bridge")
-    testImplementation("com.datastax.cassandra:cassandra-driver-core:${project.cassandraDriverVersion}")
+    testImplementation("org.apache.cassandra:java-driver-core:${project.cassandraDriverVersion}")
     testImplementation(testFixtures(project(':cassandra-bridge')))
     testImplementation project(":cassandra-four-zero-bridge")
     testImplementation project(":cassandra-four-zero-types")

@@ -34,7 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import com.datastax.driver.core.utils.UUIDs;
+import com.datastax.oss.driver.api.core.uuid.Uuids;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
@@ -242,7 +242,7 @@ class PartitionKeyIntegrationTest extends SharedClusterSparkIntegrationTestBase
                      VALIDATION_DEFAULT_COLUMNS_MAPPER, VALIDATION_DEFAULT_ROW_MAPPER),
         Arguments.of(ASCII, (Function<Integer, String>) value -> String.format("'%d'", value),
                      VALIDATION_DEFAULT_COLUMNS_MAPPER, VALIDATION_DEFAULT_ROW_MAPPER),
-        Arguments.of(TIMEUUID, (Function<Integer, String>) offset -> UUIDs.startOf(CURRENT_TIMESTAMP + offset).toString(),
+        Arguments.of(TIMEUUID, (Function<Integer, String>) offset -> Uuids.startOf(CURRENT_TIMESTAMP + offset).toString(),
                      VALIDATION_DEFAULT_COLUMNS_MAPPER, VALIDATION_DEFAULT_ROW_MAPPER)
         );
     }

@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
@@ -34,8 +35,11 @@ import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.datastax.driver.core.ResultSetFuture;
-import com.datastax.driver.core.ThreadLocalMonotonicTimestampGenerator;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
+import com.datastax.oss.driver.api.core.session.ProgrammaticArguments;
+import com.datastax.oss.driver.internal.core.context.DefaultDriverContext;
+import com.datastax.oss.driver.internal.core.time.ThreadLocalTimestampGenerator;
 import org.apache.cassandra.bridge.CdcBridgeFactory;
 import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.cdc.CdcKryoRegister;
@@ -58,7 +62,9 @@ public class SidecarStatePersister implements StatePersister
     // group latest state by jobId/token range, so we persist independently
     protected final ConcurrentHashMap<PersistWrapper.Key, PersistWrapper> latestState = new ConcurrentHashMap<>();
     protected final ConcurrentLinkedQueue<TimedFutureWrapper> activeFlush = new ConcurrentLinkedQueue<>();
-    private final ThreadLocalMonotonicTimestampGenerator timestampGenerator = new ThreadLocalMonotonicTimestampGenerator();
+    private final ThreadLocalTimestampGenerator timestampGenerator = new ThreadLocalTimestampGenerator(
+        new DefaultDriverContext(DriverConfigLoader.programmaticBuilder().build(), ProgrammaticArguments.builder().build())
+    );
     private final SidecarCdcOptions sidecarCdcOptions;
     private final CdcOptions cdcOptions;
     private final SidecarCdcCassandraClient cassandraClient;
@@ -409,10 +415,10 @@ public class SidecarStatePersister implements StatePersister
 
     protected static class TimedFutureWrapper
     {
-        protected final List<ResultSetFuture> futures;
+        protected final List<CompletableFuture<AsyncResultSet>> futures;
         protected final long startTimeNanos;
 
-        protected TimedFutureWrapper(List<ResultSetFuture> futures)
+        protected TimedFutureWrapper(List<CompletableFuture<AsyncResultSet>> futures)
         {
             this.futures = futures;
             this.startTimeNanos = System.nanoTime();
@@ -420,7 +426,7 @@ public class SidecarStatePersister implements StatePersister
 
         public void await() throws ExecutionException, InterruptedException
         {
-            for (ResultSetFuture future : futures)
+            for (CompletableFuture<AsyncResultSet> future : futures)
             {
                 future.get();
             }

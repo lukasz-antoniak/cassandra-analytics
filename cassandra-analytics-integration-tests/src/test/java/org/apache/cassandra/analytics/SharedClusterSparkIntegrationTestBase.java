@@ -31,7 +31,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import com.datastax.driver.core.ResultSet;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.vdurmont.semver4j.Semver;
 import io.vertx.junit5.VertxExtension;
 import org.apache.cassandra.bridge.CassandraBridge;
@@ -191,7 +191,7 @@ public abstract class SharedClusterSparkIntegrationTestBase extends SharedCluste
     }
 
     public void validateWritesWithDriverResultSet(List<Row> sparkData, ResultSet driverData,
-                                                  Function<com.datastax.driver.core.Row, String> driverRowFormatter)
+                                                  Function<com.datastax.oss.driver.api.core.cql.Row, String> driverRowFormatter)
     {
         Set<String> driverEntries = new HashSet<>();
         driverData.forEach(row -> driverEntries.add(driverRowFormatter

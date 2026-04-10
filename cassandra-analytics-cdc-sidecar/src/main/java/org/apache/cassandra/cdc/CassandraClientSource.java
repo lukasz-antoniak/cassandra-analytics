@@ -23,6 +23,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -34,17 +36,19 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.datastax.driver.core.AuthProvider;
-import com.datastax.driver.core.Authenticator;
-import com.datastax.driver.core.BoundStatement;
-import com.datastax.driver.core.PreparedStatement;
-import com.datastax.driver.core.ResultSet;
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.Session;
-import com.datastax.driver.core.exceptions.AuthenticationException;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.auth.AuthProvider;
+import com.datastax.oss.driver.api.core.auth.AuthenticationException;
+import com.datastax.oss.driver.api.core.auth.Authenticator;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.metadata.EndPoint;
 import org.apache.cassandra.cdc.api.CassandraSource;
 import org.apache.cassandra.cdc.msg.Value;
 import org.apache.cassandra.spark.data.CassandraTypes;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Optional `CassandraSource` implementation that reads values from the Cassandra cluster using the standard Cassandra client.
@@ -56,16 +60,16 @@ public class CassandraClientSource implements CassandraSource
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraClientSource.class);
     private static final String READ_QUERY_FORMAT = "SELECT %s from %s.%s where %s";
     private static final int EXPIRE_AFTER_MINUTES = 60;
-    private final Session session;
+    private final CqlSession session;
     private final CassandraTypes types;
     private final Cache<String, PreparedStatement> preparedStatementCache;
 
-    public CassandraClientSource(Session session, CassandraTypes types)
+    public CassandraClientSource(CqlSession session, CassandraTypes types)
     {
         this(session, types, EXPIRE_AFTER_MINUTES);
     }
 
-    public CassandraClientSource(Session session, CassandraTypes types, int preparedStatementCacheExpireAfterMinutes)
+    public CassandraClientSource(CqlSession session, CassandraTypes types, int preparedStatementCacheExpireAfterMinutes)
     {
         this.session = session;
         this.types = types;
@@ -97,12 +101,12 @@ public class CassandraClientSource implements CassandraSource
         // Get primaryKey values & execute query
         BoundStatement boundStatement = preparedStatement.bind(getPrimaryKeyObjects(types, primaryKeyColumns));
         ResultSet resultSet = session.execute(boundStatement);
-        if (resultSet.isExhausted())
+        Row row = resultSet.one(); // There should only be one row
+        if (row == null)
         {
             LOGGER.error("The read query {} to C* failed", readQuery);
             return null;
         }
-        Row row = resultSet.one(); // There should only be one row
 
         // Create list of ByteBuffer with values of columns to fetch
         List<ByteBuffer> result = new ArrayList<>();
@@ -143,27 +147,44 @@ public class CassandraClientSource implements CassandraSource
 
     private static class MtlsAuthProvider implements AuthProvider
     {
+        @NotNull
         @Override
-        public Authenticator newAuthenticator(InetSocketAddress inetSocketAddress, String s) throws AuthenticationException
+        public Authenticator newAuthenticator(@NotNull EndPoint endPoint, @NotNull String serverAuthenticator) throws AuthenticationException
         {
             return new MutualTLSAuthenticator();
         }
 
+        @Override
+        public void onMissingChallenge(@NotNull EndPoint endPoint) throws AuthenticationException
+        {
+        }
+
+        @Override
+        public void close() throws Exception
+        {
+        }
+
         private static class MutualTLSAuthenticator implements Authenticator
         {
-            public byte[] initialResponse()
+            @NotNull
+            public CompletionStage<ByteBuffer> initialResponse()
             {
-                return new byte[]{0, 0};
+                return CompletableFuture.completedFuture(ByteBuffer.wrap(new byte[]{0, 0}));
             }
 
-            public byte[] evaluateChallenge(byte[] bytes)
+            @NotNull
+            @Override
+            public CompletionStage<ByteBuffer> evaluateChallenge(ByteBuffer challenge)
             {
-                return null;
+                return CompletableFuture.completedFuture(ByteBuffer.wrap(new byte[]{0, 0}));
             }
 
-            public void onAuthenticationSuccess(byte[] bytes)
+            @NotNull
+            @Override
+            public CompletionStage<Void> onAuthenticationSuccess(ByteBuffer token)
             {
                 LOGGER.info("Successfully authenticated with mTLS");
+                return CompletableFuture.completedFuture(null);
             }
         }
     }

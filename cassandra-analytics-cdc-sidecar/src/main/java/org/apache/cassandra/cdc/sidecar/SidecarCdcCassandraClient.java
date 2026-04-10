@@ -22,9 +22,10 @@ package org.apache.cassandra.cdc.sidecar;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
-import com.datastax.driver.core.ResultSetFuture;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import org.apache.cassandra.bridge.TokenRange;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -37,7 +38,7 @@ public interface SidecarCdcCassandraClient
     SidecarCdcCassandraClient STUB = new SidecarCdcCassandraClient()
     {
         @Override
-        public List<ResultSetFuture> storeStateAsync(String jobId, TokenRange range, ByteBuffer buf, long timestamp)
+        public List<CompletableFuture<AsyncResultSet>> storeStateAsync(String jobId, TokenRange range, ByteBuffer buf, long timestamp)
         {
             return Collections.emptyList();
         }
@@ -58,10 +59,10 @@ public interface SidecarCdcCassandraClient
      * @param timestamp timestamp to use in the write mutation
      * @return list of Cassandra client ResultSetFutures
      */
-    List<ResultSetFuture> storeStateAsync(@NotNull String jobId,
-                                          @NotNull TokenRange range,
-                                          @NotNull ByteBuffer buf,
-                                          long timestamp);
+    List<CompletableFuture<AsyncResultSet>> storeStateAsync(@NotNull String jobId,
+                                                            @NotNull TokenRange range,
+                                                            @NotNull ByteBuffer buf,
+                                                            long timestamp);
 
     /**
      * @param jobId      cdc job id

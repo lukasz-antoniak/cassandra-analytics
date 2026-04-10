@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -36,7 +37,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
-import com.datastax.driver.core.ResultSetFuture;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.cdc.api.CdcOptions;
 import org.apache.cassandra.spark.utils.AsyncExecutor;
@@ -59,15 +60,17 @@ public class SidecarStatePersisterTest
         SidecarCdcCassandraClient cassandraClient = new SidecarCdcCassandraClient()
         {
             @Override
-            public List<ResultSetFuture> storeStateAsync(@NotNull String jobId, @NotNull TokenRange range, @NotNull ByteBuffer buf, long timestamp)
+            public List<CompletableFuture<AsyncResultSet>> storeStateAsync(@NotNull String jobId,
+                                                                           @NotNull TokenRange range,
+                                                                           @NotNull ByteBuffer buf,
+                                                                           long timestamp)
             {
                 byte[] ar = new byte[buf.remaining()];
                 buf.get(ar);
                 store.put(range, ar);
-                ResultSetFuture future = mock(ResultSetFuture.class);
-                when(future.isDone()).thenReturn(true);
+                AsyncResultSet future = mock(AsyncResultSet.class);
                 writeLatch.countDown();
-                return Collections.singletonList(future);
+                return Collections.singletonList(CompletableFuture.completedFuture(future));
             }
 
             @Override

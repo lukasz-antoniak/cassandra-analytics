@@ -90,7 +90,7 @@ class QuoteIdentifiersWriteTest extends SharedClusterSparkIntegrationTestBase
                                           QuoteIdentifiersWriteTest::defaultRowFormatter);
     }
 
-    public static String defaultRowFormatter(com.datastax.driver.core.Row row)
+    public static String defaultRowFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
         return row.getInt("IdEnTiFiEr") +
                ":'" +
@@ -100,7 +100,7 @@ class QuoteIdentifiersWriteTest extends SharedClusterSparkIntegrationTestBase
     }
 
     @NotNull
-    private static String rowWithUdtFormatter(com.datastax.driver.core.Row row)
+    private static String rowWithUdtFormatter(com.datastax.oss.driver.api.core.cql.Row row)
     {
         return row.getInt("IdEnTiFiEr") +
                ":'" +
@@ -108,7 +108,7 @@ class QuoteIdentifiersWriteTest extends SharedClusterSparkIntegrationTestBase
                "':" +
                row.getInt("limit") +
                ":" +
-               row.getUDTValue("User_Defined_Type");
+               row.getUdtValue("User_Defined_Type");
     }
 
     static Stream<Arguments> testInputs()
