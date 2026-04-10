@@ -214,7 +214,7 @@ public class CdcRandomAccessReaderTest
 
         // Configure source to provide sequential data
         testSource.setRequestHandler(call -> {
-            int dataSize = (int) (call.end - call.start);
+            int dataSize = (int) (call.end - call.start + 1);
             Buffer data = Buffer.buffer(dataSize);
             for (int i = 0; i < dataSize; i++)
             {
@@ -389,6 +389,7 @@ public class CdcRandomAccessReaderTest
 
         static class RequestCall
         {
+            // start and end offsets are considered inclusive
             final long start;
             final long end;
             final StreamConsumer consumer;
