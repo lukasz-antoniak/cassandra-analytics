@@ -154,7 +154,6 @@ public class CdcRandomAccessReaderTest
         testCommitLog.setMaxOffset(100L);
         final int bufferSize = 50;
         testSource.setRequestHandler(call -> {
-            // Backward seek path has a bug: requests buffer.remaining() + 1 bytes
             // We cap delivery at buffer capacity to work around this and test flip() behavior
             long actualEnd = Math.min(call.end, testCommitLog.maxOffset());
             long requestedBytes = actualEnd - call.start + 1; // range boundaries are inclusive
