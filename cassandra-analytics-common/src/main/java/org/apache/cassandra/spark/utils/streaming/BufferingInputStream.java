@@ -107,7 +107,7 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
         this.rangeStart = position;
         // adjusting bytes read and written so that isFinished() returns correct output and we know
         // when we reached the end of the stream
-        this.bytesRead = position == 0 ? 0 : (position + 1);
+        this.bytesRead = position;
         this.bytesWritten.set(this.bytesRead);
     }
 

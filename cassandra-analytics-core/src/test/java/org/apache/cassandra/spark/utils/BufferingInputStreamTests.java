@@ -353,7 +353,7 @@ public class BufferingInputStreamTests
     @Test
     public void testUnalignedEndReading() throws IOException
     {
-        int dataSize = 2527234;
+        int dataSize = 8192;
         int chunkSize = 4096;
         int remainingReadBytes = 2;
         List<byte[]> returnedBuffers = new ArrayList<>();

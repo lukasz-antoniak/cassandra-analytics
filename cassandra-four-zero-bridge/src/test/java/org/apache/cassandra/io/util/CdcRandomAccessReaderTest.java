@@ -158,8 +158,6 @@ public class CdcRandomAccessReaderTest
             long actualEnd = Math.min(call.end, testCommitLog.maxOffset());
             long requestedBytes = actualEnd - call.start + 1; // range boundaries are inclusive
             long position = call.start;
-
-            // Cap delivery to buffer capacity to avoid BufferOverflowException from + 1 bug
             long bytesToDeliver = Math.min(requestedBytes, bufferSize);
 
             // Deliver capped amount
