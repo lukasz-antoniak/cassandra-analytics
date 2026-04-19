@@ -199,12 +199,12 @@ public class BufferingInputStream<T extends CassandraFile> extends InputStream i
         }
 
         long chunkSize = rangeStart == 0 ? source.headerChunkSize() : source.chunkBufferSize();
-        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize);
+        long rangeEnd = Math.min(source.size(), rangeStart + chunkSize) - 1; // start and end range are inclusive
         if (rangeEnd >= rangeStart)
         {
             activeRequest = true;
             source.request(rangeStart, rangeEnd, this);
-            rangeStart += chunkSize + 1;  // Increment range start pointer for next request
+            rangeStart += chunkSize; // Increment range start pointer for next request
         }
         else
         {
