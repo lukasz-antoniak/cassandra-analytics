@@ -378,6 +378,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             cassandraVersion,
             isSSTableVersionBasedBridgeDisabled);
 
+        LOGGER.info("Using bridge: {}", bridgeVersion.name());
+
         // Validate SSTable versions
         validateSStableVersions(this.sstableVersionsOnCluster, bridgeVersion, isSSTableVersionBasedBridgeDisabled);
 

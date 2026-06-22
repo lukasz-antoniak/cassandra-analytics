@@ -21,4 +21,5 @@ set -xe
 
 SCRIPT_DIR=$( dirname -- "$( readlink -f -- "$0"; )"; )
 
-${SCRIPT_DIR}/build-dtest-jars.sh
+# ${SCRIPT_DIR}/build-dtest-jars.sh
+${SCRIPT_DIR}/build-hcd-dtest-jars.sh

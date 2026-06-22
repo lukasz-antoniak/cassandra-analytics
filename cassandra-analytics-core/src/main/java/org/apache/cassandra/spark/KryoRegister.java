@@ -63,7 +63,8 @@ public class KryoRegister implements KryoRegistrator
 
     public static final Map<CassandraVersion, Class<?>> KRYO_REGISTRATORS = Map.of(CassandraVersion.FOURZERO, V40.class,
                                                                                    CassandraVersion.FOURONE, V41.class,
-                                                                                   CassandraVersion.FIVEZERO, V50.class);
+                                                                                   CassandraVersion.FIVEZERO, V50.class,
+                                                                                   CassandraVersion.HCDONEZERO, HCDV1.class);
 
     static
     {
@@ -194,6 +195,14 @@ public class KryoRegister implements KryoRegistrator
         public V50()
         {
             super(CassandraVersion.FIVEZERO);
+        }
+    }
+
+    public static class HCDV1 extends KryoRegister
+    {
+        public HCDV1()
+        {
+            super(CassandraVersion.HCDONEZERO);
         }
     }
 }

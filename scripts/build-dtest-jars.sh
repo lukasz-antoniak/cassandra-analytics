@@ -32,7 +32,7 @@ else
   # Examples
   # a tagged release of Cassandra 4.0
   #   "cassandra-4.0:cassandra-4.0.17"
-   # a hash that points to a commit on the cassandra-4.0 branch
+  # a hash that points to a commit on the cassandra-4.0 branch
   #   "cassandra-4.0:1f79c8492528f01bcc5f88951a1cc9e0d7265c54"
   # the cassandra-4.0 branch - used for nightly integration test runs or local testing of new features
   #   "cassandra-4.0:cassandra-4.0"
@@ -59,7 +59,7 @@ else
     echo "Clean up $DTEST_JAR_DIR"
     rm -rf "$DTEST_JAR_DIR/cassandra-build"
     rm "$DTEST_JAR_DIR"/dtest*.jar
-exit 0
+    exit 0
   fi
 
   source "$SCRIPT_DIR/functions.sh"
