@@ -207,7 +207,7 @@ public enum CassandraVersion
 
         // NOTE: These default versions must stay in sync with cassandraFullVersionMap in build.gradle.
         String providedSupportedVersionsOrDefault = System.getProperty("cassandra.analytics.bridges.supported_versions",
-                                                                       "cassandra-4.0.11.0,cassandra-5.0.5");
+                                                                       "cassandra-4.0.11.0,cassandra-5.0.4.0");
         supportedVersions = Arrays.stream(providedSupportedVersionsOrDefault.split(","))
                                   .filter(version -> CassandraVersion.fromVersion(version)
                                                                      .filter(v -> v.sstableFormats().contains(configuredSSTableFormat))

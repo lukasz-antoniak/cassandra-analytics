@@ -80,6 +80,19 @@ configurations {
     hcdonezeroSparkSql {
         description = 'DataStax HCD 1.0 SparkSQL Converter'
     }
+
+    hcdtwozero {
+        description = 'DataStax HCD 2.0 dependency'
+    }
+    hcdtwozeroBridge {
+        description = 'Bridge to DataStax HCD 2.0'
+    }
+    hcdtwozeroTypes {
+        description = 'DataStax HCD 2.0 Data Types'
+    }
+    hcdtwozeroSparkSql {
+        description = 'DataStax HCD 2.0 SparkSQL Converter'
+    }
 }
 
 dependencies {
@@ -102,6 +115,11 @@ dependencies {
     hcdonezeroBridge(project(path: ':hcd-one-zero-bridge'))
     hcdonezeroTypes(project(path: ':hcd-one-zero-types'))
     hcdonezeroSparkSql(project(path: ':cassandra-analytics-spark-hcd-one-zero-converter'))
+
+    hcdtwozero(project(path: ':hcd-two-zero', configuration: 'shadow'))
+    hcdtwozeroBridge(project(path: ':hcd-two-zero-bridge'))
+    hcdtwozeroTypes(project(path: ':hcd-two-zero-types'))
+    hcdtwozeroSparkSql(project(path: ':cassandra-analytics-spark-hcd-two-zero-converter'))
 
     api(project(':cassandra-analytics-spark-converter'))
 
@@ -162,6 +180,11 @@ jar {
     dependsOn(configurations.hcdonezeroSparkSql)
     dependsOn(configurations.hcdonezeroTypes)
 
+    dependsOn(configurations.hcdtwozero)
+    dependsOn(configurations.hcdtwozeroBridge)
+    dependsOn(configurations.hcdtwozeroSparkSql)
+    dependsOn(configurations.hcdtwozeroTypes)
+
     writeBuildVersion(version, project.projectDir)
 
     exclude('META-INF/*')
@@ -180,6 +203,11 @@ jar {
         from(configurations.hcdonezeroBridge.singleFile)
         from(configurations.hcdonezeroTypes.singleFile)
         from(configurations.hcdonezeroSparkSql.singleFile)
+
+        from(configurations.hcdtwozero.singleFile)
+        from(configurations.hcdtwozeroBridge.singleFile)
+        from(configurations.hcdtwozeroTypes.singleFile)
+        from(configurations.hcdtwozeroSparkSql.singleFile)
     }
 }
 

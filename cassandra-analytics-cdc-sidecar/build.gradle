@@ -69,6 +69,16 @@ configurations {
     hcdonezeroTypes {
         description = 'DataStax HCD 1.0 Data Types'
     }
+
+    hcdtwozero {
+        description = 'DataStax HCD 2.0 dependency'
+    }
+    hcdtwozeroBridge {
+        description = 'Bridge to DataStax HCD 2.0'
+    }
+    hcdtwozeroTypes {
+        description = 'DataStax HCD 2.0 Data Types'
+    }
 }
 
 dependencies {
@@ -85,6 +95,10 @@ dependencies {
     hcdonezero(project(path: ':hcd-one-zero', configuration: 'shadow'))
     hcdonezeroBridge(project(path: ':hcd-one-zero-bridge'))
     hcdonezeroTypes(project(path: ':hcd-one-zero-types'))
+
+    hcdtwozero(project(path: ':hcd-two-zero', configuration: 'shadow'))
+    hcdtwozeroBridge(project(path: ':hcd-two-zero-bridge'))
+    hcdtwozeroTypes(project(path: ':hcd-two-zero-types'))
 
     implementation project(":cassandra-analytics-common")
     implementation project(':cassandra-analytics-cdc')
@@ -136,6 +150,10 @@ jar {
     dependsOn(configurations.hcdonezeroBridge)
     dependsOn(configurations.hcdonezeroTypes)
 
+    dependsOn(configurations.hcdtwozero)
+    dependsOn(configurations.hcdtwozeroBridge)
+    dependsOn(configurations.hcdtwozeroTypes)
+
     exclude('META-INF/*')
     into('bridges') {
         from(configurations.fourzero.singleFile)
@@ -149,6 +167,10 @@ jar {
         from(configurations.hcdonezero.singleFile)
         from(configurations.hcdonezeroBridge.singleFile)
         from(configurations.hcdonezeroTypes.singleFile)
+
+        from(configurations.hcdtwozero.singleFile)
+        from(configurations.hcdtwozeroBridge.singleFile)
+        from(configurations.hcdtwozeroTypes.singleFile)
     }
 }
 

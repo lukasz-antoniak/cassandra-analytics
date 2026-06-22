@@ -43,13 +43,14 @@ else
   #   ext.cassandraFullVersionMap = ["4.0": "4.0.17", "4.1": "4.1.4", "5.0": "5.0.5"]
   # NOTE: The following branches also need to remain in sync with CassandraVersion.java
   CANDIDATE_BRANCHES=(
-    "cassandra-4.0:cassandra-4.0.17"
-    "cassandra-4.1:99d9faeef57c9cf5240d11eac9db5b283e45a4f9"
-    "cassandra-5.0:cassandra-5.0.5"
+    # HCD 1.x version
+    "main:8f317826cdb0747124929b768a67a9c23cc45f5b"
+    # HCD 2.x version
+    "main-5.0:deebade59f4bbfb9e126432e73870a0c4f2ebe11"
   )
-  BRANCHES=( ${BRANCHES:-cassandra-4.0 cassandra-4.1 cassandra-5.0} )
+  BRANCHES=( ${BRANCHES:-main,main-5.0} )
   echo ${BRANCHES[*]}
-  REPO=${REPO:-"https://github.com/apache/cassandra.git"}
+  REPO=${REPO:-"https://github.com/datastax/cassandra.git"}
   SCRIPT_DIR=$( dirname -- "$( readlink -f -- "$0"; )"; )
   DTEST_JAR_DIR="$(dirname "${SCRIPT_DIR}/")/dependencies"
   DTEST_JAR_DIR=${CASSANDRA_DEP_DIR:-$DTEST_JAR_DIR}
@@ -99,6 +100,10 @@ else
       cd "${branch}"
       if [ -z "${sha}" ] ; then
         git pull
+      fi
+      if [ -n "${sha}" ] ; then
+        git fetch --depth=1 upstream "${sha}"
+        git reset --hard FETCH_HEAD
       fi
     fi
     if [ -z "${sha}" ] ; then
