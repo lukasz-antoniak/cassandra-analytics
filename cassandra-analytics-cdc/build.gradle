@@ -60,6 +60,32 @@ configurations {
     fivezeroAvroConverter {
         description = 'Avro converter for Cassandra 5.0 Data Types'
     }
+
+    hcdonezero {
+        description = 'DataStax HCD 1.0 dependency'
+    }
+    hcdonezeroBridge {
+        description = 'Bridge to DataStax HCD 1.0'
+    }
+    hcdonezeroTypes {
+        description = 'DataStax HCD 1.0 Data Types'
+    }
+    hcdonezeroAvroConverter {
+        description = 'Avro converter for DataStax HCD 1.0 Data Types'
+    }
+
+    hcdtwozero {
+        description = 'DataStax HCD 2.0 dependency'
+    }
+    hcdtwozeroBridge {
+        description = 'Bridge to DataStax HCD 2.0'
+    }
+    hcdtwozeroTypes {
+        description = 'DataStax HCD 2.0 Data Types'
+    }
+    hcdtwozeroAvroConverter {
+        description = 'Avro converter for DataStax HCD 2.0 Data Types'
+    }
 }
 
 dependencies {
@@ -77,6 +103,16 @@ dependencies {
     fivezeroBridge(project(path: ':cassandra-five-zero-bridge'))
     fivezeroTypes(project(path: ':cassandra-five-zero-types'))
     fivezeroAvroConverter(project(":cassandra-five-zero-avro-converter"))
+
+    hcdonezero(project(path: ':hcd-one-zero', configuration: 'shadow'))
+    hcdonezeroBridge(project(path: ':hcd-one-zero-bridge'))
+    hcdonezeroTypes(project(path: ':hcd-one-zero-types'))
+    hcdonezeroAvroConverter(project(":hcd-one-zero-avro-converter"))
+
+    hcdtwozero(project(path: ':hcd-two-zero', configuration: 'shadow'))
+    hcdtwozeroBridge(project(path: ':hcd-two-zero-bridge'))
+    hcdtwozeroTypes(project(path: ':hcd-two-zero-types'))
+    hcdtwozeroAvroConverter(project(":hcd-two-zero-avro-converter"))
 
     implementation "com.google.guava:guava:${guavaVersion}"
 
@@ -127,6 +163,16 @@ jar {
     dependsOn(configurations.fivezeroTypes)
     dependsOn(configurations.fivezeroAvroConverter)
 
+    dependsOn(configurations.hcdonezero)
+    dependsOn(configurations.hcdonezeroBridge)
+    dependsOn(configurations.hcdonezeroTypes)
+    dependsOn(configurations.hcdonezeroAvroConverter)
+
+    dependsOn(configurations.hcdtwozero)
+    dependsOn(configurations.hcdtwozeroBridge)
+    dependsOn(configurations.hcdtwozeroTypes)
+    dependsOn(configurations.hcdtwozeroAvroConverter)
+
     exclude('META-INF/*')
     into('bridges') {
         from(configurations.fourzero.singleFile)
@@ -138,6 +184,16 @@ jar {
         from(configurations.fivezeroBridge.singleFile)
         from(configurations.fivezeroTypes.singleFile)
         from(configurations.fivezeroAvroConverter.singleFile)
+
+        from(configurations.hcdonezero.singleFile)
+        from(configurations.hcdonezeroBridge.singleFile)
+        from(configurations.hcdonezeroTypes.singleFile)
+        from(configurations.hcdonezeroAvroConverter.singleFile)
+
+        from(configurations.hcdtwozero.singleFile)
+        from(configurations.hcdtwozeroBridge.singleFile)
+        from(configurations.hcdtwozeroTypes.singleFile)
+        from(configurations.hcdtwozeroAvroConverter.singleFile)
     }
 }
 
@@ -159,7 +215,7 @@ def configureCdcTestTask = { Test task, String majorMinor = null ->
         // Full version format to match CDC's TestVersionSupplier; tests both versions for backward compat.
         // 4.1 intentionally excluded from gradlew defaults to keep local iteration fast;
         // use testCassandra41 for targeted 4.1 runs. CI covers 4.1 via CASSANDRA_VERSION env var.
-        task.systemProperty "cassandra.sidecar.versions_to_test", "4.0.17,5.0.5"
+        task.systemProperty "cassandra.sidecar.versions_to_test", "4.0.11.0,5.0.4.0"
     }
 
     task.minHeapSize = '1024m'

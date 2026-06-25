@@ -22,7 +22,10 @@ package org.apache.cassandra.spark;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -31,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
-import org.apache.cassandra.bridge.BaseCassandraBridgeFactory;
 import org.apache.cassandra.bridge.BigNumberConfigImpl;
 import org.apache.cassandra.bridge.CassandraBridgeFactory;
 import org.apache.cassandra.bridge.CassandraVersion;
@@ -61,7 +63,9 @@ public class KryoRegister implements KryoRegistrator
 
     public static final Map<CassandraVersion, Class<?>> KRYO_REGISTRATORS = Map.of(CassandraVersion.FOURZERO, V40.class,
                                                                                    CassandraVersion.FOURONE, V41.class,
-                                                                                   CassandraVersion.FIVEZERO, V50.class);
+                                                                                   CassandraVersion.FIVEZERO, V50.class,
+                                                                                   CassandraVersion.HCDONEZERO, HCDV1.class,
+                                                                                   CassandraVersion.HCDTWOZERO, HCDV2.class);
 
     static
     {
@@ -81,6 +85,44 @@ public class KryoRegister implements KryoRegistrator
     {
         LOGGER.info("Registering custom Kryo serializer type={}", type.getName());
         KRYO_SERIALIZERS.put(type, serializer);
+    }
+
+    /**
+     * Validates that a Kryo registrator exists for the given Cassandra version.
+     * This should be called after bridge version determination to ensure that
+     * Spark can properly serialize objects for the selected bridge.
+     *
+     * @param bridgeVersion the CassandraVersion to validate
+     * @param clusterCassandraVersion optional Cassandra version string for additional context in error messages
+     * @throws IllegalStateException if no Kryo registrator is registered for this version
+     */
+    public static void validateKryoRegistratorExists(@NotNull CassandraVersion bridgeVersion,
+                                                     String clusterCassandraVersion)
+    {
+        Class<?> registratorClass = KRYO_REGISTRATORS.get(bridgeVersion);
+        if (registratorClass == null)
+        {
+            // Build available versions list for suggestion
+            String availableKryoVersions = KRYO_REGISTRATORS.keySet().stream()
+                .map(v -> v.name() + " (" + v.versionName() + ")")
+                .collect(Collectors.joining(", "));
+
+            throw new IllegalStateException(
+                String.format("No Kryo registrator registered for bridge version %s (%s). " +
+                              "Cluster Cassandra version: %s. " +
+                              "Available Kryo registrators: %s. " +
+                              "Cannot proceed with job as Spark serialization will fail. " +
+                              "To resolve this issue, update the '%s' configuration property to match the bridge version: %s",
+                              bridgeVersion.name(),
+                              bridgeVersion.versionName(),
+                              clusterCassandraVersion,
+                              availableKryoVersions,
+                              CASSANDRA_VERSION,
+                              bridgeVersion.versionName()));
+        }
+
+        LOGGER.debug("Validated Kryo registrator exists for bridge version {}: {}",
+                    bridgeVersion.versionName(), registratorClass.getName());
     }
 
     private final CassandraVersion cassandraVersion;
@@ -104,26 +146,33 @@ public class KryoRegister implements KryoRegistrator
         LOGGER.info("Setting up Kryo");
         configuration.set(SPARK_SERIALIZER, "org.apache.spark.serializer.KryoSerializer");
 
-        // Add KryoRegister to SparkConf serialization if not already there
+        // Preserve any pre-existing (e.g. user-supplied) registrators and keep them first.
+        // LinkedHashSet gives a stable, predictable registration order on the driver; the same
+        // resulting spark.kryo.registrator string is then propagated to all executors via SparkConf.
         Set<String> registratorsSet = Arrays.stream(configuration.get(SPARK_REGISTRATORS, "").split(","))
                                             .filter(string -> string != null && !string.isEmpty())
-                                            .collect(Collectors.toSet());
+                                            .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        // TODO: Find a better way to initialize Kryo serializer, instead of relaying
-        //  on Cassandra version specified as parameter of Spark job. Can we get Cassandra version from Sidecar?
-        CassandraVersion cassandraVersion = BaseCassandraBridgeFactory.getCassandraVersion(configuration.get(CASSANDRA_VERSION, "4.0.0"));
-        Class<?> registratorClass = KRYO_REGISTRATORS.get(cassandraVersion);
-        if (registratorClass == null)
+        // SSTable based bridge selection feature selects the bridge version, which may differ
+        // from cassandra.version; registering every loadable bridge's registrator ensures Spark
+        // can serialize objects for whichever bridge is chosen. Only implemented (bundled) versions
+        // are used, so we never attempt to load a bridge JAR that is not available.
+        List<Class<?>> registratorClasses = Arrays.stream(CassandraVersion.implementedVersions())
+                                                  .map(KRYO_REGISTRATORS::get)
+                                                  .filter(Objects::nonNull)
+                                                  .collect(Collectors.toList());
+        if (registratorClasses.isEmpty())
         {
-            throw new IllegalArgumentException("Kryo registrator not configured for Cassandra version: " + cassandraVersion);
+            throw new IllegalStateException("No Kryo registrators configured for implemented Cassandra versions: "
+                                            + Arrays.toString(CassandraVersion.implementedVersions()));
         }
 
-        registratorsSet.add(registratorClass.getName());
+        registratorClasses.forEach(registratorClass -> registratorsSet.add(registratorClass.getName()));
         String registratorsString = String.join(",", registratorsSet);
         LOGGER.info("Setting kryo registrators: " + registratorsString);
         configuration.set(SPARK_REGISTRATORS, registratorsString);
 
-        configuration.registerKryoClasses(new Class<?>[]{registratorClass});
+        configuration.registerKryoClasses(registratorClasses.toArray(new Class<?>[0]));
     }
 
     public static class V40 extends KryoRegister
@@ -147,6 +196,22 @@ public class KryoRegister implements KryoRegistrator
         public V50()
         {
             super(CassandraVersion.FIVEZERO);
+        }
+    }
+
+    public static class HCDV1 extends KryoRegister
+    {
+        public HCDV1()
+        {
+            super(CassandraVersion.HCDONEZERO);
+        }
+    }
+
+    public static class HCDV2 extends KryoRegister
+    {
+        public HCDV2()
+        {
+            super(CassandraVersion.HCDTWOZERO);
         }
     }
 }

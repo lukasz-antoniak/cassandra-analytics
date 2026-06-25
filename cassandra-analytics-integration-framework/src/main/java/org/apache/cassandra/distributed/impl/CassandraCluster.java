@@ -103,7 +103,8 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
 
         UpgradeableCluster.Builder clusterBuilder = UpgradeableCluster.build(originalNodeCount);
         clusterBuilder.withVersion(requestedVersion)
-                      .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
+                      // TODO(lantoniak): Fix: .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
+                      // TODO(lantoniak): Why I cannot have two 4.0 JARs in /dependencies folder?
                       .withSharedClasses(EXTRA.or(clusterBuilder.getSharedClasses()))
                       .withDCs(dcCount)
                       .withTokenCount(configuration.tokenCount)
@@ -228,7 +229,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
     @Override
     public void awaitRingStatus(IInstance instance, IInstance expectedInRing, String status)
     {
-        ClusterUtils.awaitRingStatus(instance, expectedInRing, status);
+        ClusterUtils.awaitRingState(instance, expectedInRing, status); // TODO(lantoniak): Fix DSE cassandra.
     }
 
     @Override
