@@ -59,7 +59,7 @@ dependencies {
     testImplementation project(":hcd-one-zero-types")
     testImplementation(project(':cassandra-bridge'))
     testImplementation project(":cassandra-analytics-spark-converter")
-    testImplementation project(":cassandra-analytics-spark-five-zero-converter")
+    testImplementation project(":cassandra-analytics-spark-hcd-one-zero-converter")
     testImplementation(project(path: ':hcd-one-zero', configuration: 'shadow'))
     testImplementation(testFixtures(project(':cassandra-bridge')))
     testImplementation("org.junit.jupiter:junit-jupiter-api:${project.junitVersion}")

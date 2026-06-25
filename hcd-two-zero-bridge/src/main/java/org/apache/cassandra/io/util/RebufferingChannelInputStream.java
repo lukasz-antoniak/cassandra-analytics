@@ -25,9 +25,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 
-import org.apache.cassandra.io.util.FileUtils;
-import org.apache.cassandra.io.util.RebufferingInputStream;
-
 public class RebufferingChannelInputStream extends RebufferingInputStream
 {
     private static final int DEFAULT_BUFFER_SIZE = 16384;

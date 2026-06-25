@@ -251,7 +251,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
     @Override
     public CassandraVersion getVersion()
     {
-        return CassandraVersion.FIVEZERO;
+        return CassandraVersion.HCDTWOZERO;
     }
 
     @Override

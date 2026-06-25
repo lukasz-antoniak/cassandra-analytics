@@ -37,15 +37,15 @@ public class DirectWriteAndReadJob extends AbstractCassandraJob
         System.setProperty("SKIP_STARTUP_VALIDATIONS", "true");
         // Configuration for Cassandra 5.x (and optionally BTI sstable format):
         // System.setProperty("spark.cassandra_analytics.cassandra.version", "5.0.0");
-        // System.setProperty("cassandra.analytics.bridges.sstable_format", "bti");
+        System.setProperty("cassandra.analytics.bridges.sstable_format", "bti");
         new DirectWriteAndReadJob().start(args);
     }
 
     protected JobConfiguration configureJob(SparkContext sc, SparkConf sparkConf)
     {
         Map<String, String> writeOptions = new HashMap<>();
-        writeOptions.put("sidecar_contact_points", "localhost,localhost2,localhost3");
-        writeOptions.put("keyspace", "spark_test");
+        writeOptions.put("sidecar_contact_points", "localhost");
+        writeOptions.put("keyspace", "spark_test2");
         writeOptions.put("table", "test");
         writeOptions.put("local_dc", "datacenter1");
         writeOptions.put("bulk_writer_cl", "LOCAL_QUORUM");
@@ -57,8 +57,8 @@ public class DirectWriteAndReadJob extends AbstractCassandraJob
                                             sparkConf.getInt("spark.executor.instances", 1));
         int numCores = coresPerExecutor * numExecutors;
         Map<String, String> readerOptions = new HashMap<>();
-        readerOptions.put("sidecar_contact_points", "localhost,localhost2,localhost3");
-        readerOptions.put("keyspace", "spark_test");
+        readerOptions.put("sidecar_contact_points", "localhost");
+        readerOptions.put("keyspace", "spark_test2");
         readerOptions.put("table", "test");
         readerOptions.put("DC", "datacenter1");
         readerOptions.put("snapshotName", UUID.randomUUID().toString());

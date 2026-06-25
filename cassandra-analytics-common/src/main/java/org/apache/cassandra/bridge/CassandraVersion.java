@@ -77,6 +77,11 @@ public enum CassandraVersion
              new String[]{
                  "big-na",
                  "big-nb",
+                 "bti-cb", // TODO(lantoniak): Verify. Did BTI SStable version change even in HCD 1 vs 2?
+             }),
+    HCDTWOZERO(50, "5.0.4.0", "hcd-two-zero", new String[]{"big", "bti"},
+             new String[]{
+                 "big-oa",
                  "bti-cc",
              });
 
@@ -199,7 +204,7 @@ public enum CassandraVersion
         // FOURONE is intentionally excluded from local-dev defaults to keep iteration fast;
         // CI covers 4.1 via explicit CASSANDRA_VERSION env var or per-version Gradle tasks (e.g. testCassandra41).
         String providedVersionsOrDefault = System.getProperty("cassandra.analytics.bridges.implemented_versions",
-                                                              String.join(",", HCDONEZERO.name(), FIVEZERO.name()));
+                                                              String.join(",", HCDONEZERO.name(), HCDTWOZERO.name()));
         implementedVersions = Arrays.stream(providedVersionsOrDefault.split(","))
                                     .map(CassandraVersion::valueOf)
                                     .filter(v -> v.sstableFormats().contains(configuredSSTableFormat))

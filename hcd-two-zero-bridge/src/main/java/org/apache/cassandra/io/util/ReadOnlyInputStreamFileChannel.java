@@ -54,8 +54,7 @@ public class ReadOnlyInputStreamFileChannel extends FileChannel
         if (dst.position() == 0 && dst.limit() > 0)
         {
             // o.a.c.io.util.SimpleChunkReader flips the buffer, so position should be set to the end.
-            // TODO(lantoniak): Hotfix, port also to OSS.
-            dst.position(Math.min(read, dst.limit()));
+            dst.position(read);
         }
         return read;
     }

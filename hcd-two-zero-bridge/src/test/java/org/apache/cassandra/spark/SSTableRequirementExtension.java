@@ -79,7 +79,7 @@ public class SSTableRequirementExtension implements InvocationInterceptor
     {
         if (requirement != null)
         {
-            assumeTrue(CassandraVersion.sstableFormat().equals(requirement.format()),
+            assumeTrue(CassandraVersion.configuredSSTableFormat().equals(requirement.format()),
                        requirement::description);
         }
     }
