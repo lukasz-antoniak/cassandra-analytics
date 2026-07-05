@@ -43,6 +43,7 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.bridge.CassandraBridgeFactory;
+import org.apache.cassandra.bridge.CassandraVersion;
 import org.apache.cassandra.spark.bulkwriter.cloudstorage.coordinated.CoordinatedWriteConf;
 import org.apache.cassandra.spark.bulkwriter.token.ConsistencyLevel;
 import org.apache.cassandra.spark.bulkwriter.token.ReplicaAwareFailureHandler;
@@ -378,9 +379,17 @@ public class MockBulkWriterContext implements BulkWriterContext, ClusterInfo, Jo
     }
 
     @Override
-    public String getLowestCassandraVersion()
+    public CassandraVersion getBridgeVersion()
     {
-        return cassandraVersion;
+        return CassandraVersion.fromVersion(cassandraVersion).orElse(CassandraVersion.FIVEZERO);
+    }
+
+    public Set<String> getSSTableVersionsOnCluster()
+    {
+        // Return SSTable versions based on Cassandra version for testing
+        CassandraVersion version = CassandraVersion.fromVersion(cassandraVersion)
+            .orElse(CassandraVersion.FIVEZERO);
+        return new HashSet<>(version.getNativeSStableVersions());
     }
 
     private List<String> buildCompleteBatchIds(List<String> uuids)
