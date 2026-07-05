@@ -235,7 +235,7 @@ public abstract class SharedClusterSparkIntegrationTestBase extends SharedCluste
      * Finds the names of all SSTable {@code *-Data.db} files belonging to the given table on a single node,
      * scanning every configured data directory and scoping to the table's own data subdirectory.
      */
-    private Set<String> findSSTableDataFiles(IInstance instance, QualifiedName table)
+    protected Set<String> findSSTableDataFiles(IInstance instance, QualifiedName table)
     {
         String[] dataDirs = (String[]) instance.config().getParams().get("data_file_directories");
         Set<String> dataFileNames = new HashSet<>();
