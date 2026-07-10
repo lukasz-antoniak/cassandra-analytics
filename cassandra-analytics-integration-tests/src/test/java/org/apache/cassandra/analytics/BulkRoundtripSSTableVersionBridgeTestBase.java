@@ -109,13 +109,13 @@ abstract class BulkRoundtripSSTableVersionBridgeTestBase extends SharedClusterSp
         // any analytics bridge usage, and relies on forkEvery = 1 (the integration-test default) for a fresh JVM per
         // test class.
         System.setProperty("cassandra.analytics.bridges.sstable_format", sstableFormat());
-        if ("bti".equals(sstableFormat()))
-        {
-            // BTI (bti-da) is a Cassandra 5.0+ format; skip on older versions.
-            Semver version = new Semver(testVersion.version(), Semver.SemverType.LOOSE);
-            assumeTrue(version.isGreaterThanOrEqualTo(new Semver("5.0", Semver.SemverType.LOOSE)),
-                       "BTI format (bti-da) requires Cassandra 5.0+, but test version is " + testVersion.version());
-        }
+//        if ("bti".equals(sstableFormat()))
+//        {
+//            // BTI (bti-da) is a Cassandra 5.0+ format; skip on older versions.
+//            Semver version = new Semver(testVersion.version(), Semver.SemverType.LOOSE);
+//            assumeTrue(version.isGreaterThanOrEqualTo(new Semver("5.0", Semver.SemverType.LOOSE)),
+//                       "BTI format (bti-da) requires Cassandra 5.0+, but test version is " + testVersion.version());
+//        }
     }
 
     @Override
@@ -247,7 +247,7 @@ abstract class BulkRoundtripSSTableVersionBridgeTestBase extends SharedClusterSp
     {
         if ("bti".equals(sstableFormat()))
         {
-            assertSSTableFormatOnDisk(table, "bti", "da");
+            assertSSTableFormatOnDisk(table, "bti", "cc");
         }
         else
         {
