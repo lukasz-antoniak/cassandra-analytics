@@ -71,6 +71,7 @@ import org.jetbrains.annotations.NotNull;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 public class SortedSSTableWriterTest
 {
@@ -113,6 +114,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void canCreateWriterForVersion(String version) throws IOException
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
         SortedSSTableWriter tw = new SortedSSTableWriter(writerContext, tmpDir, new XXHash32DigestAlgorithm(), 1);
         List<SSTableDescriptor> allSSTables = new ArrayList<>();
@@ -127,17 +132,17 @@ public class SortedSSTableWriterTest
             case 40:
             case 41:
                 // Format is "nb-<generation>-big"
-                assertThat(baseFileName).matches("nb-\\d+-big");
+                assertThat(baseFileName).matches("nb-.+-big");
                 break;
             case 50:
                 // Format is "oa-<generation>-big" or "da-<generation>-bti"
                 if ("big".equals(CassandraVersion.configuredSSTableFormat()))
                 {
-                    assertThat(baseFileName).matches("oa-\\d+-big");
+                    assertThat(baseFileName).matches("oa-.+-big");
                 }
                 else
                 {
-                    assertThat(baseFileName).matches("da-\\d+-bti");
+                    assertThat(baseFileName).matches("(da|cc)-.+-bti");
                 }
                 break;
             default:
@@ -167,6 +172,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testBloomFilterRebuild(String version) throws IOException
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         int rowCount = 50_000;
         CassandraBridge bridge = CassandraBridgeFactory.get(version);
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
@@ -234,6 +243,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testBloomFilterRebuildErrorHandling(String version) throws IOException
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
         SortedSSTableWriter tw = new SortedSSTableWriter(writerContext, tmpDir, new XXHash32DigestAlgorithm(), 1)
         {
@@ -292,6 +305,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testConcurrentPrepareSStablesToSendAndClose(String version) throws Exception
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
 
         // First, create real SSTables that will be used to simulate the race
@@ -411,6 +428,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testBytesWrittenWithDeletedFiles(String version) throws Exception
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
 
         // Create initial SSTables to simulate intermediate flush
