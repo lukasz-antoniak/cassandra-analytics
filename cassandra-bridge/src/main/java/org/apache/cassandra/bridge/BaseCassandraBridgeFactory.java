@@ -149,7 +149,7 @@ public class BaseCassandraBridgeFactory
                                }
                            }).toArray(URL[]::new);
 
-        return new PostDelegationClassLoader(urls, Thread.currentThread().getContextClassLoader(), tempFiles);
+        return new PostDelegationClassLoader(urls, Thread.currentThread().getContextClassLoader(), tempFiles, resourceNames);
     }
 
     public static File copyClassResourceToFile(String resource)

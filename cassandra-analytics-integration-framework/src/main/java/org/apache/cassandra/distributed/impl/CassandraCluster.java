@@ -103,8 +103,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
 
         UpgradeableCluster.Builder clusterBuilder = UpgradeableCluster.build(originalNodeCount);
         clusterBuilder.withVersion(requestedVersion)
-                      // TODO(lantoniak): Fix: .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
-                      // TODO(lantoniak): Why I cannot have two 4.0 JARs in /dependencies folder?
+                      .withDynamicPortAllocation(configuration.dynamicPortAllocation) // to allow parallel test runs
                       .withSharedClasses(EXTRA.or(clusterBuilder.getSharedClasses()))
                       .withDCs(dcCount)
                       .withTokenCount(configuration.tokenCount)

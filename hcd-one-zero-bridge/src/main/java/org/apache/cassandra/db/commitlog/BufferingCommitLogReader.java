@@ -51,6 +51,7 @@ import org.apache.cassandra.io.util.DataInputBuffer;
 import org.apache.cassandra.io.util.FileDataInput;
 import org.apache.cassandra.io.util.RandomAccessReader;
 import org.apache.cassandra.io.util.RebufferingInputStream;
+import org.apache.cassandra.schema.TableId;
 import org.apache.cassandra.spark.exceptions.TransportFailureException;
 import org.apache.cassandra.spark.utils.AsyncExecutor;
 import org.apache.cassandra.spark.utils.LoggerHelper;
@@ -594,7 +595,7 @@ public class BufferingCommitLogReader implements CommitLogReadHandler,
         logger.trace("Read mutation for", () -> "keyspace", mutation::getKeyspaceName, () -> "key", mutation::key,
                      () -> "mutation", () -> '{'
                                              + mutation.getPartitionUpdates().stream()
-                                                       .map(AbstractBTreePartition::toString)
+                                                       .map(Object::toString)
                                                        .collect(Collectors.joining(", "))
                                              + '}');
 
@@ -761,6 +762,11 @@ public class BufferingCommitLogReader implements CommitLogReadHandler,
                 .peek(pair -> pair.getLeft().validate())
                 .map(this::toCdcUpdate)
                 .forEach(updates::add);
+    }
+
+    @Override
+    public void handleInvalidMutation(TableId tableId)
+    {
     }
 
     /**
