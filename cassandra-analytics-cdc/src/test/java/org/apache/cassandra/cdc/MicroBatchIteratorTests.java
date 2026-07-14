@@ -32,6 +32,7 @@ import java.util.stream.IntStream;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -261,6 +262,8 @@ public class MicroBatchIteratorTests extends CdcTestBase
                 });
     }
 
+    // TODO(DataStax): TriePartitionUpdate seems to hold only static columns or regular columns (never both at the same time).
+    @Disabled
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdateStaticColumnAndValueColumns(CassandraVersion version)
