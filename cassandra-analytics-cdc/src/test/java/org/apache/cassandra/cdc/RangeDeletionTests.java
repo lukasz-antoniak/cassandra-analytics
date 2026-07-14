@@ -186,6 +186,7 @@ public class RangeDeletionTests extends CdcTestBase
                         {
                             // TODO(DataStax): TriePartitionUpdate seems to hold only static columns or regular columns (never both at the same time).
                             // assertThat(event.getStaticColumns()).isNotNull();
+                            assertThat(event.getStaticColumns()).isNull();
                         }
                         else
                         {
