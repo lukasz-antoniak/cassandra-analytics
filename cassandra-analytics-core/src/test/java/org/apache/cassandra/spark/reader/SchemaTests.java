@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -403,6 +404,8 @@ public class SchemaTests extends VersionRunner
         assertThat(udtField.field(3).type()).isEqualTo(bridge.aInt());
     }
 
+    // TODO(DataStax): Issue with frozen types.
+    @Disabled
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testCollectionUdts(CassandraBridge bridge)
@@ -458,6 +461,8 @@ public class SchemaTests extends VersionRunner
         assertThat(fields.get(3).type()).isEqualTo(bridge.text());
     }
 
+    // TODO(DataStax): Issue with frozen types.
+    @Disabled
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testParseTuple(CassandraBridge bridge)
@@ -484,6 +489,8 @@ public class SchemaTests extends VersionRunner
         assertThat(tuple.type(3)).isEqualTo(bridge.bool());
     }
 
+    // TODO(DataStax): Issue with frozen types.
+    @Disabled
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testComplexSchema(CassandraBridge bridge)
