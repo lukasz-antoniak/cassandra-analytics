@@ -68,7 +68,6 @@ import org.apache.cassandra.dht.RandomPartitioner;
 import org.apache.cassandra.io.compress.ICompressor;
 import org.apache.cassandra.io.compress.LZ4Compressor;
 import org.apache.cassandra.io.sstable.CQLSSTableWriter;
-import org.apache.cassandra.io.sstable.Component;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.io.sstable.ISSTableScanner;
 import org.apache.cassandra.io.sstable.SSTableTombstoneWriter;
@@ -354,7 +353,8 @@ public class CassandraBridgeImplementation extends CassandraBridge
         }
 
         Descriptor descriptor = ReaderUtils.constructDescriptor(keyspace, table, ssTable);
-        org.apache.cassandra.io.util.File filterFile = new org.apache.cassandra.io.util.File(directory, descriptor.fileFor(SSTableFormat.Components.FILTER).name());
+        org.apache.cassandra.io.util.File filterFile = new org.apache.cassandra.io.util.File(directory,
+                                                                                             descriptor.fileFor(SSTableFormat.Components.FILTER).name());
         try (IFilter filter = FilterDbUtils.buildBloomFilter(cqltable, ssTable, tableMetadata))
         {
             Function<ByteBuffer, Boolean> tracker = bytes -> {

@@ -42,7 +42,6 @@ import org.apache.cassandra.cdc.api.Marker;
 import org.apache.cassandra.cdc.stats.ICdcStats;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.Mutation;
-import org.apache.cassandra.db.partitions.AbstractBTreePartition;
 import org.apache.cassandra.db.partitions.PartitionUpdate;
 import org.apache.cassandra.db.rows.DeserializationHelper;
 import org.apache.cassandra.exceptions.UnknownTableException;

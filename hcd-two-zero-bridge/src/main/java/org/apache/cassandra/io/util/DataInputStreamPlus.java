@@ -22,8 +22,6 @@ package org.apache.cassandra.io.util;
 import java.io.DataInputStream;
 import java.io.InputStream;
 
-import org.apache.cassandra.io.util.DataInputPlus;
-
 public class DataInputStreamPlus extends DataInputStream implements DataInputPlus
 {
     public DataInputStreamPlus(InputStream is)
