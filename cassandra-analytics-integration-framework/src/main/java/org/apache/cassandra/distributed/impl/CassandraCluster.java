@@ -108,6 +108,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
                       .withSharedClasses(EXTRA.or(clusterBuilder.getSharedClasses()))
                       .withDCs(dcCount)
                       .withTokenCount(configuration.tokenCount)
+                      .withSubnet(configuration.subnet)
                       .withDataDirCount(configuration.numDataDirsPerInstance);
 
         if (configuration.tokenCount > 1)

@@ -72,8 +72,8 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
     @Test
     void testCoordinatedWriteToTwoClusters() throws Exception
     {
-        try (IClusterExtension<? extends IInstance> cluster1 = classLoaderWrapper.loadCluster(testVersion.version(), clusterConfiguration());
-             IClusterExtension<? extends IInstance> cluster2 = classLoaderWrapper.loadCluster(testVersion.version(), clusterConfiguration());
+        try (IClusterExtension<? extends IInstance> cluster1 = classLoaderWrapper.loadCluster(testVersion.version(), clusterConfiguration(0));
+             IClusterExtension<? extends IInstance> cluster2 = classLoaderWrapper.loadCluster(testVersion.version(), clusterConfiguration(1));
              S3MockContainer s3 = new S3MockContainer("2.17.0").withInitialBuckets(BUCKET_NAME))
         {
             LOGGER.info("Both Cassandra clusters are up");
@@ -161,12 +161,13 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
         throw new AssertionError("Sidecar server failed to init schema");
     }
 
-    private ClusterBuilderConfiguration clusterConfiguration()
+    private ClusterBuilderConfiguration clusterConfiguration(int subnet)
     {
         ClusterBuilderConfiguration conf = new ClusterBuilderConfiguration();
         conf.additionalInstanceConfig(Map.of("storage_compatibility_mode", "NONE"));
         conf.nodesPerDc(3);
         conf.dcCount(1);
+        conf.subnet(subnet);
         return conf;
     }
 
