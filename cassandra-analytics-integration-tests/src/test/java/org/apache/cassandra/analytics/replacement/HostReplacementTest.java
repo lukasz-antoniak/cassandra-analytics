@@ -52,9 +52,9 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
  * Integration tests that verifies bulk writes during a host replacement operation in the Cassandra cluster where the
  * operation is expected to succeed
  */
+@Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
 class HostReplacementTest extends HostReplacementTestBase
 {
-    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @ParameterizedTest(name = "{index} => {0}")
     @MethodSource("singleDCTestInputs")
     void testHostReplacement(TestConsistencyLevel cl)

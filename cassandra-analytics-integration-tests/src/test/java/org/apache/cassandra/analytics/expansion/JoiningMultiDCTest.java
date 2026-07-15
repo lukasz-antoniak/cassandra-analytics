@@ -54,9 +54,9 @@ import static org.apache.cassandra.testing.TestUtils.CREATE_TEST_TABLE_STATEMENT
 import static org.apache.cassandra.testing.TestUtils.DC1_RF3_DC2_RF3;
 import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
 
+@Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
 class JoiningMultiDCTest extends JoiningTestBase
 {
-    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @ParameterizedTest(name = "{index} => {0}")
     @MethodSource("multiDCTestInputs")
     void testJoiningNodeInMultiDCTest(TestConsistencyLevel cl)

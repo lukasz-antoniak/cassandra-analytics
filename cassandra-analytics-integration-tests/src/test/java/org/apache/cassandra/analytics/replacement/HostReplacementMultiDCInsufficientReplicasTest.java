@@ -55,11 +55,11 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
  * bringing down a node in addition to the replacement failure resulting in too few replicas to satisfy the
  * replication factor requirements.
  */
+@Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
 class HostReplacementMultiDCInsufficientReplicasTest extends HostReplacementTestBase
 {
     static final QualifiedName QUALIFIED_NAME = TestUtils.uniqueTestTableFullName(TEST_KEYSPACE);
 
-    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @Test
     void nodeReplacementFailureMultiDCInsufficientNodes()
     {

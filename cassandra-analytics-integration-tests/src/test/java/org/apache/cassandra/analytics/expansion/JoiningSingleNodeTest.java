@@ -55,9 +55,9 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
 /**
  * Integration tests to validate bulk writes during a Cassandra instance join operation
  */
+@Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
 class JoiningSingleNodeTest extends JoiningTestBase
 {
-    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @ParameterizedTest(name = "{index} => {0}")
     @MethodSource("singleDCTestInputs")
     void testSingleJoiningNode(TestConsistencyLevel cl)
