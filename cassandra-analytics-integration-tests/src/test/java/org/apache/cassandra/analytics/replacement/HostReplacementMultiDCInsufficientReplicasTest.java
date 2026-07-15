@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import com.google.common.util.concurrent.Uninterruptibles;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import net.bytebuddy.ByteBuddy;
@@ -58,6 +59,7 @@ class HostReplacementMultiDCInsufficientReplicasTest extends HostReplacementTest
 {
     static final QualifiedName QUALIFIED_NAME = TestUtils.uniqueTestTableFullName(TEST_KEYSPACE);
 
+    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @Test
     void nodeReplacementFailureMultiDCInsufficientNodes()
     {

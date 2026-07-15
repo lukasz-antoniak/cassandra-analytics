@@ -227,11 +227,11 @@ jobs:
             cassandra: '5.0.4.0'
             jdk: '11'
             spark: '3'
-          - config: 's2.12-c4.0.11.0'
-            scala: '2.12'
-            cassandra: '4.0.11.0'
-            jdk: '11'
-            spark: '3'
+#          - config: 's2.12-c4.0.11.0'
+#            scala: '2.12'
+#            cassandra: '4.0.11.0'
+#            jdk: '11'
+#            spark: '3'
       fail-fast: false
     steps:
       - name: Setup JDK

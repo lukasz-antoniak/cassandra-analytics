@@ -262,8 +262,7 @@ public class MicroBatchIteratorTests extends CdcTestBase
                 });
     }
 
-    // TODO(DataStax): TriePartitionUpdate seems to hold only static columns or regular columns (never both at the same time).
-    @Disabled
+    @Disabled("TriePartitionUpdate seems to hold only static columns or regular columns (never both at the same time)")
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.cdc.test.TestVersionSupplier#testVersions")
     public void testUpdateStaticColumnAndValueColumns(CassandraVersion version)

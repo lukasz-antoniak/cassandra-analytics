@@ -404,8 +404,7 @@ public class SchemaTests extends VersionRunner
         assertThat(udtField.field(3).type()).isEqualTo(bridge.aInt());
     }
 
-    // TODO(DataStax): Issue with frozen types.
-    @Disabled
+    @Disabled("Issue with frozen types")
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testCollectionUdts(CassandraBridge bridge)
@@ -461,8 +460,7 @@ public class SchemaTests extends VersionRunner
         assertThat(fields.get(3).type()).isEqualTo(bridge.text());
     }
 
-    // TODO(DataStax): Issue with frozen types.
-    @Disabled
+    @Disabled("Issue with frozen types")
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testParseTuple(CassandraBridge bridge)
@@ -489,8 +487,7 @@ public class SchemaTests extends VersionRunner
         assertThat(tuple.type(3)).isEqualTo(bridge.bool());
     }
 
-    // TODO(DataStax): Issue with frozen types.
-    @Disabled
+    @Disabled("Issue with frozen types")
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.spark.data.VersionRunner#bridges")
     public void testComplexSchema(CassandraBridge bridge)

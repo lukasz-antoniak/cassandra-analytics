@@ -229,7 +229,7 @@ public class CassandraCluster<I extends IInstance> implements IClusterExtension<
     @Override
     public void awaitRingStatus(IInstance instance, IInstance expectedInRing, String status)
     {
-        ClusterUtils.awaitRingState(instance, expectedInRing, status); // TODO(lantoniak): Fix DSE cassandra.
+        ClusterUtils.awaitRingStatus(instance, expectedInRing, status);
     }
 
     @Override

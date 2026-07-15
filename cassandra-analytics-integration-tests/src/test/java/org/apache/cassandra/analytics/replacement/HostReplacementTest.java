@@ -23,6 +23,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -53,6 +54,7 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
  */
 class HostReplacementTest extends HostReplacementTestBase
 {
+    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @ParameterizedTest(name = "{index} => {0}")
     @MethodSource("singleDCTestInputs")
     void testHostReplacement(TestConsistencyLevel cl)

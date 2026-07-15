@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -56,6 +57,7 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
  */
 class JoiningSingleNodeTest extends JoiningTestBase
 {
+    @Disabled("CASSANDRA-19902 needs to be ported for StorageService MBean to be available before bootstrap completes")
     @ParameterizedTest(name = "{index} => {0}")
     @MethodSource("singleDCTestInputs")
     void testSingleJoiningNode(TestConsistencyLevel cl)

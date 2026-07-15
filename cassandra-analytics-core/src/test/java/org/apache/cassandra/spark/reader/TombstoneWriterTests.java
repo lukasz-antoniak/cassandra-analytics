@@ -46,8 +46,7 @@ public class TombstoneWriterTests
     private static final int NUM_ROWS = 50;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // TODO(DataStax): sstableToJson() does not work correctly.
-    @Disabled
+    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testPartitionTombstone()
     {
@@ -94,8 +93,7 @@ public class TombstoneWriterTests
             }));
     }
 
-    // TODO(DataStax): sstableToJson() does not work correctly.
-    @Disabled
+    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testRowTombstone()
     {
@@ -147,8 +145,7 @@ public class TombstoneWriterTests
             }));
     }
 
-    // TODO(DataStax): sstableToJson() does not work correctly.
-    @Disabled
+    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testRangeTombstone()
     {
