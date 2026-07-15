@@ -142,7 +142,7 @@ public class SortedSSTableWriterTest
                 }
                 else
                 {
-                    assertThat(baseFileName).matches("da-.+-bti");
+                    assertThat(baseFileName).matches("(da|cc)-.+-bti");
                 }
                 break;
             default:
@@ -243,6 +243,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testBloomFilterRebuildErrorHandling(String version) throws IOException
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
         SortedSSTableWriter tw = new SortedSSTableWriter(writerContext, tmpDir, new XXHash32DigestAlgorithm(), 1)
         {
@@ -424,6 +428,10 @@ public class SortedSSTableWriterTest
     @MethodSource("supportedVersions")
     public void testBytesWrittenWithDeletedFiles(String version) throws Exception
     {
+        assumeThat(!CassandraVersion.HCDONEZERO.equals(CassandraVersion.fromVersion(version).orElse(null)))
+        .describedAs("HCD 1.x does not support CQLSSTableWriter#setSSTablesProducedListener() method")
+        .isTrue();
+
         MockBulkWriterContext writerContext = new MockBulkWriterContext(tokenRangeMapping, version, ConsistencyLevel.CL.LOCAL_QUORUM);
 
         // Create initial SSTables to simulate intermediate flush

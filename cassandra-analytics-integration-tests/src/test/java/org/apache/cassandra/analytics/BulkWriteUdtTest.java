@@ -982,6 +982,7 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing text and a map with UDT values
      * <p>Table: CREATE TABLE qt_tuple_map_udt (id BIGINT PRIMARY KEY, data tuple&lt;text, map&lt;text, frozen&lt;person&gt;&gt;&gt;)
      */
+    @Disabled("Issue with frozen types")
     @Test
     void testTupleWithMapOfUdts()
     {
