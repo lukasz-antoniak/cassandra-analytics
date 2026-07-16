@@ -23,7 +23,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,59 +43,54 @@ public class TombstoneWriterTests
     private static final int NUM_ROWS = 50;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testPartitionTombstone()
     {
-        qt().forAll(TestUtils.tombstoneVersions())
-            .assuming(CassandraVersion.HCDTWOZERO::equals)
-            .checkAssert(version -> TestUtils.runTest(version, (partitioner, directory, bridge) -> {
-                // Write tombstone SSTable
-                TestSchema schema = TestSchema.basicBuilder(bridge)
-                                              .withDeleteFields("a =")
-                                              .build();
-                schema.writeTombstoneSSTable(directory, bridge, partitioner, writer -> {
-                    for (int index = 0; index < NUM_ROWS; index++)
-                    {
-                        writer.write(index);
-                    }
-                });
-
-                // Convert SSTable to JSON
-                Path dataDbFile = TestUtils.getFirstFileType(directory, FileType.DATA);
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                bridge.sstableToJson(dataDbFile, out);
-                JsonNode node;
-                try
-                {
-                    node = MAPPER.readTree(out.toByteArray());
-                }
-                catch (IOException exception)
-                {
-                    throw new RuntimeException(exception);
-                }
-
-                // Verify SSTable contains partition tombstones
-                assertThat(node).hasSize(NUM_ROWS);
+        TestUtils.runTest(CassandraVersion.HCDTWOZERO, (partitioner, directory, bridge) -> {
+            // Write tombstone SSTable
+            TestSchema schema = TestSchema.basicBuilder(bridge)
+                                          .withDeleteFields("a =")
+                                          .build();
+            schema.writeTombstoneSSTable(directory, bridge, partitioner, writer -> {
                 for (int index = 0; index < NUM_ROWS; index++)
                 {
-                    JsonNode partition = node.get(index).get("partition");
-                    int key = partition.get("key").get(0).asInt();
-                    assertThat(key).isBetween(0, NUM_ROWS - 1);
-                    assertThat(node.get(index).has("rows")).isTrue();
-                    assertThat(partition.has("deletion_info")).isTrue();
-                    assertThat(partition.get("deletion_info").has("marked_deleted")).isTrue();
-                    assertThat(partition.get("deletion_info").has("local_delete_time")).isTrue();
+                    writer.write(index);
                 }
-            }));
+            });
+
+            // Convert SSTable to JSON
+            Path dataDbFile = TestUtils.getFirstFileType(directory, FileType.DATA);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            bridge.sstableToJson(dataDbFile, out);
+            JsonNode node;
+            try
+            {
+                node = MAPPER.readTree(out.toByteArray());
+            }
+            catch (IOException exception)
+            {
+                throw new RuntimeException(exception);
+            }
+
+            // Verify SSTable contains partition tombstones
+            assertThat(node).hasSize(NUM_ROWS);
+            for (int index = 0; index < NUM_ROWS; index++)
+            {
+                JsonNode partition = node.get(index).get("partition");
+                int key = partition.get("key").get(0).asInt();
+                assertThat(key).isBetween(0, NUM_ROWS - 1);
+                assertThat(node.get(index).has("rows")).isTrue();
+                assertThat(partition.has("deletion_info")).isTrue();
+                assertThat(partition.get("deletion_info").has("marked_deleted")).isTrue();
+                assertThat(partition.get("deletion_info").has("local_delete_time")).isTrue();
+            }
+        });
     }
 
-    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testRowTombstone()
     {
         qt().forAll(TestUtils.tombstoneVersions())
-            .assuming(CassandraVersion.HCDTWOZERO::equals)
             .checkAssert(version -> TestUtils.runTest(version, (partitioner, directory, bridge) -> {
                 // Write tombstone SSTable
                 TestSchema schema = TestSchema.basicBuilder(bridge)
@@ -143,12 +137,10 @@ public class TombstoneWriterTests
             }));
     }
 
-    @Disabled("sstableToJson() does not work correctly")
     @Test
     public void testRangeTombstone()
     {
         qt().forAll(TestUtils.tombstoneVersions())
-            .assuming(CassandraVersion.HCDTWOZERO::equals)
             .checkAssert(version -> TestUtils.runTest(version, (partitioner, directory, bridge) -> {
                 // Write tombstone SSTable
                 TestSchema schema = TestSchema.basicBuilder(bridge)

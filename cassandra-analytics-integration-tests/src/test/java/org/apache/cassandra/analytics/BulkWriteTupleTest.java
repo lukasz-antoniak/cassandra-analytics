@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.sidecar.testing.QualifiedName;
@@ -286,7 +285,6 @@ class BulkWriteTupleTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Set of tuples
      * <p>Table: CREATE TABLE qt_set_tuples (id BIGINT PRIMARY KEY, data set&lt;frozen&lt;tuple&lt;int, text&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testSetOfTuples()
     {
@@ -368,7 +366,6 @@ class BulkWriteTupleTest extends SharedClusterSparkIntegrationTestBase
      * <p>Table: CREATE TABLE qt_map_tuple_kv (id BIGINT PRIMARY KEY,
      *          data map&lt;frozen&lt;tuple&lt;int, text&gt;&gt;, frozen&lt;tuple&lt;text, int&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testMapWithTupleKeysAndTupleValues()
     {
@@ -663,7 +660,6 @@ class BulkWriteTupleTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing UDT with collections and nested tuple
      * <p>Table: CREATE TABLE qt_tuple_udt (id BIGINT PRIMARY KEY, data frozen&lt;tuple&lt;int, frozen&lt;udt_with_collections&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleContainingUdtWithCollections()
     {
@@ -752,7 +748,6 @@ class BulkWriteTupleTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing a set of nested tuples with deduplication
      * <p>Table: CREATE TABLE qt_tuple_set_tuples (id BIGINT PRIMARY KEY, data frozen&lt;tuple&lt;int, set&lt;frozen&lt;tuple&lt;text, int&gt;&gt;&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleContainingSetOfTuples()
     {

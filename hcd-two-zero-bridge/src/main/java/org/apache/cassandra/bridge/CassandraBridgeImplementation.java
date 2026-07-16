@@ -733,7 +733,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
             throw new RuntimeException("Invalid sstable file");
         }
 
-        Descriptor desc = Descriptor.fromFilename(dataDbFile.toAbsolutePath().toString());
+        Descriptor desc = Descriptor.fromFileWithComponent(new File(dataDbFile.toAbsolutePath().toString()), false).left;
         try
         {
             TableMetadataRef metadata = TableMetadataRef.forOfflineTools(Util.metadataFromSSTable(desc));

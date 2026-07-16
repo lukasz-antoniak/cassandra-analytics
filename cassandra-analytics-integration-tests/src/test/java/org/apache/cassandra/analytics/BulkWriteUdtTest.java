@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.sidecar.testing.QualifiedName;
@@ -511,7 +510,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing two different UDT types (person and address)
      * <p>Table: CREATE TABLE qt_tuple_udts (id BIGINT PRIMARY KEY, data tuple&lt;frozen&lt;person&gt;, frozen&lt;address&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleOfUdts()
     {
@@ -725,7 +723,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: UDT containing a set of tuples with order-independent comparison
      * <p>Table: CREATE TABLE qt_udt_set_tuple (id BIGINT PRIMARY KEY, data frozen&lt;udt_set_tuple&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testUdtWithSetOfTuples()
     {
@@ -895,7 +892,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing an int and a list of UDTs
      * <p>Table: CREATE TABLE qt_tuple_list_udt (id BIGINT PRIMARY KEY, data tuple&lt;int, list&lt;frozen&lt;person&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleWithListOfUdts()
     {
@@ -982,7 +978,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing text and a map with UDT values
      * <p>Table: CREATE TABLE qt_tuple_map_udt (id BIGINT PRIMARY KEY, data tuple&lt;text, map&lt;text, frozen&lt;person&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleWithMapOfUdts()
     {
@@ -1070,7 +1065,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: Tuple containing int and a set of UDTs with order-independent comparison
      * <p>Table: CREATE TABLE qt_tuple_set_udt (id BIGINT PRIMARY KEY, data tuple&lt;int, set&lt;frozen&lt;person&gt;&gt;&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testTupleWithSetOfUdts()
     {
@@ -1323,7 +1317,6 @@ class BulkWriteUdtTest extends SharedClusterSparkIntegrationTestBase
      * Tests: UDT containing a map with UDT keys and UDT values
      * <p>Table: CREATE TABLE qt_udt_map_udt (id BIGINT PRIMARY KEY, data frozen&lt;udt_map_container&gt;)
      */
-    @Disabled("Issue with frozen types")
     @Test
     void testUdtWithMapOfUdts()
     {
