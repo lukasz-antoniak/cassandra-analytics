@@ -51,6 +51,7 @@ import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.sidecar.testing.SharedClusterIntegrationTestBase.IntegrationTestModule;
 import org.apache.cassandra.testing.ClusterBuilderConfiguration;
 import org.apache.cassandra.testing.IClusterExtension;
+import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -92,9 +93,11 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
             Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS); // wait additional time
             LOGGER.info("Both Sidecars are up. sidecar1 port1: {}, sidecar2 port1: {}", sidecar1.actualPort(), sidecar2.actualPort());
 
+            SparkConf sparkConf = sparkTestUtils.defaultSparkConf();
+            sparkConf.set("spark.cassandra_analytics.bridge.disable_sstable_version_based", "true");
             SparkSession spark = SparkSession
                                  .builder()
-                                 .config(sparkTestUtils.defaultSparkConf())
+                                 .config(sparkConf)
                                  .getOrCreate();
             Dataset<Row> df = DataGenerationUtils.generateCourseData(spark, ROW_COUNT);
             String coordinatedConf = coordinatedWriteConfiguration(cluster1, sidecar1, cluster2, sidecar2);
