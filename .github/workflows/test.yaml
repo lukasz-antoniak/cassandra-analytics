@@ -50,11 +50,18 @@ jobs:
           rm ant*.deb
 
           sudo bash -c 'for i in {2..20}; do echo 127.0.0.${i} localhost${i} >> /etc/hosts; done'
+          sudo bash -c 'for j in {0..1}; do for i in {1..5}; do echo 127.0.${j}.${i} local${j}host${i} >> /etc/hosts; done; done'
 
           for i in {2..20}
           do
             sudo ip addr add "127.0.0.${i}" dev lo
             sudo route add -host "127.0.0.${i}" dev lo;
+          done
+
+          for i in {1..5}
+          do
+            sudo ip addr add "127.0.1.${i}" dev lo
+            sudo route add -host "127.0.1.${i}" dev lo;
           done
 
           export JDK_VERSION="11"

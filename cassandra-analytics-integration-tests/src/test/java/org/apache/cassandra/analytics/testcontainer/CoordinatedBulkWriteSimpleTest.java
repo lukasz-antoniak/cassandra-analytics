@@ -40,6 +40,7 @@ import org.apache.cassandra.analytics.DataGenerationUtils;
 import org.apache.cassandra.analytics.testcontainer.BulkWriteS3CompatModeSimpleTest.S3MockProxyConfigurationImpl;
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.IInstance;
+import org.apache.cassandra.sidecar.common.server.dns.DnsResolver;
 import org.apache.cassandra.sidecar.config.S3ClientConfiguration;
 import org.apache.cassandra.sidecar.config.yaml.S3ClientConfigurationImpl;
 import org.apache.cassandra.sidecar.config.yaml.SidecarConfigurationImpl.Builder;
@@ -86,8 +87,8 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
             createSchema(tableName, cluster1, cluster2);
             LOGGER.info("Test schema created on both clusters");
 
-            Server sidecar1 = startSidecarWithInstances(cluster1, s3);
-            Server sidecar2 = startSidecarWithInstances(cluster2, s3);
+            Server sidecar1 = startSidecarWithInstances(cluster1, s3, dnsResolver1);
+            Server sidecar2 = startSidecarWithInstances(cluster2, s3, dnsResolver2);
             Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS); // wait additional time
             LOGGER.info("Both Sidecars are up. sidecar1 port1: {}, sidecar2 port1: {}", sidecar1.actualPort(), sidecar2.actualPort());
 
@@ -127,7 +128,7 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
         }
     }
 
-    private Server startSidecarWithInstances(Iterable<? extends IInstance> instances, S3MockContainer s3Mock)
+    private Server startSidecarWithInstances(Iterable<? extends IInstance> instances, S3MockContainer s3Mock, DnsResolver dnsResolver)
     {
         VertxTestContext context = new VertxTestContext();
         Function<Builder, Builder> sidecarConfigurator = builder -> {
@@ -174,10 +175,10 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
     private String coordinatedWriteConfiguration(IClusterExtension<? extends IInstance> cluster1, Server sidecar1,
                                                  IClusterExtension<? extends IInstance> cluster2, Server sidecar2)
     {
-        String cluster1Instances = sidecarInstancesOptionStream(cluster1, dnsResolver)
+        String cluster1Instances = sidecarInstancesOptionStream(cluster1, dnsResolver1)
                                    .map(hostname -> hostname + ':' + sidecar1.actualPort())
                                    .collect(Collectors.joining("\", \"", "\"", "\""));
-        String cluster2Instances = sidecarInstancesOptionStream(cluster2, dnsResolver)
+        String cluster2Instances = sidecarInstancesOptionStream(cluster2, dnsResolver2)
                                    .map(hostname -> hostname + ':' + sidecar2.actualPort())
                                    .collect(Collectors.joining("\",\"", "\"", "\""));
 

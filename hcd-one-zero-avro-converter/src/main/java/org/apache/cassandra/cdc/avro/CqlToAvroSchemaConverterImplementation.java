@@ -176,7 +176,8 @@ public class CqlToAvroSchemaConverterImplementation implements CqlToAvroSchemaCo
 
     private static boolean isFrozen(AbstractType<?> type)
     {
-        return !type.isMultiCell() || type instanceof FrozenType;
+        boolean isFreezable = type.isUDT() || type.isCollection();
+        return (isFreezable && !type.isMultiCell()) || type instanceof FrozenType;
     }
 
     private static Schema schemaFrom(AbstractType<?> columnCqlType, String namespace)
