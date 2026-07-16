@@ -32,6 +32,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.google.common.base.Preconditions;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
@@ -195,16 +197,23 @@ public class CqlUdt extends CqlType implements CqlField.CqlUdt
     }
 
     @Override
-    public Object deserializeToType(TypeConverter converter, ByteBuffer buffer, boolean isFrozen)
+    public Object deserializeToType(TypeConverter converter, ByteBuffer buffer, boolean isFrozen, boolean isInnerType)
     {
-        Object value = deserializeUdt(converter, buffer, isFrozen);
-        return value != null ? converter.convert(this, value, isFrozen) : null;
+        Object value = deserializeUdt(converter, buffer, isFrozen, isInnerType);
+        return value != null ? converter.convert(this, value, isFrozen, isInnerType) : null;
     }
 
     @Override
-    public Map<String, Object> deserializeUdt(TypeConverter typeConverter, ByteBuffer buffer, boolean isFrozen)
+    public Map<String, Object> deserializeUdt(TypeConverter typeConverter, ByteBuffer buffer, boolean isFrozen, boolean isInnerType)
     {
-        // DataStax Cassandra always freezes UDTs
+        // DataStax Cassandra always freezes UDTs inside complex types
+        if (!isInnerType && !isFrozen)
+        {
+            int fieldCount = buffer.getInt();
+            Preconditions.checkArgument(fieldCount == size(),
+                                        String.format("Unexpected number of fields deserializing UDT '%s', expected %d fields but %d found",
+                                                      cqlName(), size(), fieldCount));
+        }
         Map<String, Object> result = new LinkedHashMap<>(size());
         for (CqlField field : fields())
         {
@@ -213,7 +222,7 @@ public class CqlUdt extends CqlType implements CqlField.CqlUdt
                 break;
             }
             int length = buffer.getInt();
-            result.put(field.name(), length > 0 ? field.deserializeToType(typeConverter, ByteBufferUtils.readBytes(buffer, length), isFrozen) : null);
+            result.put(field.name(), length > 0 ? field.deserializeToType(typeConverter, ByteBufferUtils.readBytes(buffer, length), isFrozen, true) : null);
         }
 
         return result;

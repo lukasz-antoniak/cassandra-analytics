@@ -71,9 +71,9 @@ public abstract class AbstractCqlTuple extends CqlCollection implements CqlField
     }
 
     @Override
-    public Object deserializeToType(TypeConverter typeConverter, ByteBuffer buffer, boolean isFrozen)
+    public Object deserializeToType(TypeConverter typeConverter, ByteBuffer buffer, boolean isFrozen, boolean isInnerType)
     {
-        return typeConverter.convert(this, deserializeTuple(buffer, isFrozen), isFrozen);
+        return typeConverter.convert(this, deserializeTuple(buffer, isFrozen), isFrozen, isInnerType);
     }
 
     @Override
