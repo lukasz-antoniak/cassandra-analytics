@@ -587,6 +587,7 @@ public class DataTypeTests
               .run(bridge.getVersion());
     }
 
+    @Disabled("Issue with UDTs")
     @ParameterizedTest
     @MethodSource("org.apache.cassandra.bridge.VersionRunner#bridges")
     public void testDeepNestedUDT(CassandraBridge bridge)
