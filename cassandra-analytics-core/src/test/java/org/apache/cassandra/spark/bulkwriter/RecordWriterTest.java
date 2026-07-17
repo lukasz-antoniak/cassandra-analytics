@@ -181,7 +181,7 @@ class RecordWriterTest
     {
         setUp(version);
         Iterator<Tuple2<DecoratedKey, Object[]>> data = generateData();
-        validateSuccessfulWrite(version, writerContext, data, COLUMN_NAMES);
+        validateSuccessfulWrite(writerContext, data, COLUMN_NAMES);
     }
 
     @Test
@@ -205,7 +205,7 @@ class RecordWriterTest
                                                                         quoteIdentifiers);
         writerContext.setSstableDataSizeInMB(1);
         Iterator<Tuple2<DecoratedKey, Object[]>> data = generateData();
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, columnNames);
+        validateSuccessfulWrite(writerContext, data, columnNames);
     }
 
     @ParameterizedTest
@@ -219,7 +219,7 @@ class RecordWriterTest
         Map<CassandraInstance, List<UploadRequest>> uploads = writerContext.getUploads();
         assertThat(uploads.keySet().size()).isEqualTo(REPLICA_COUNT);  // Should upload to 3 replicas
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-        .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedNumberOfSSTables(version));
+        .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -231,7 +231,7 @@ class RecordWriterTest
     void testWriteWithConstantTTL() throws InterruptedException
     {
         Iterator<Tuple2<DecoratedKey, Object[]>> data = generateData(false, false);
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, COLUMN_NAMES);
+        validateSuccessfulWrite(writerContext, data, COLUMN_NAMES);
     }
 
     @Test
@@ -242,14 +242,14 @@ class RecordWriterTest
         {
         "id", "date", "course", "marks", "ttl"
         };
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, columnNamesWithTtl);
+        validateSuccessfulWrite(writerContext, data, columnNamesWithTtl);
     }
 
     @Test
     void testWriteWithConstantTimestamp() throws InterruptedException
     {
         Iterator<Tuple2<DecoratedKey, Object[]>> data = generateData(false, false);
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, COLUMN_NAMES);
+        validateSuccessfulWrite(writerContext, data, COLUMN_NAMES);
     }
 
     @Test
@@ -260,7 +260,7 @@ class RecordWriterTest
         {
         "id", "date", "course", "marks", "timestamp"
         };
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, columnNamesWithTimestamp);
+        validateSuccessfulWrite(writerContext, data, columnNamesWithTimestamp);
     }
 
     @Test
@@ -271,7 +271,7 @@ class RecordWriterTest
         {
         "id", "date", "course", "marks", "ttl", "timestamp"
         };
-        validateSuccessfulWrite(DEFAULT_CASSANDRA_VERSION, writerContext, data, columnNames);
+        validateSuccessfulWrite(writerContext, data, columnNames);
     }
 
     @ParameterizedTest
@@ -297,7 +297,7 @@ class RecordWriterTest
         // Should upload to 3 replicas
         assertThat(uploads.keySet()).hasSize(REPLICA_COUNT);
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-            .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedNumberOfSSTables(version));
+            .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -330,7 +330,7 @@ class RecordWriterTest
         // Should upload to 3 replicas
         assertThat(uploads.keySet()).hasSize(REPLICA_COUNT);
         assertThat(uploads.values().stream().mapToInt(List::size).sum())
-                    .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * expectedNumberOfSSTables(version));
+                    .isEqualTo(REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES);
         List<UploadRequest> requests = uploads.values().stream().flatMap(List::stream).collect(Collectors.toList());
         for (UploadRequest ur : requests)
         {
@@ -430,15 +430,14 @@ class RecordWriterTest
                           + "clusterId=test-cluster");
     }
 
-    private void validateSuccessfulWrite(String version,
-                                         MockBulkWriterContext writerContext,
+    private void validateSuccessfulWrite(MockBulkWriterContext writerContext,
                                          Iterator<Tuple2<DecoratedKey, Object[]>> data,
                                          String[] columnNames) throws InterruptedException
     {
         validateSuccessfulWrite(writerContext,
                                 data,
                                 columnNames,
-                                REPLICA_COUNT * FILES_PER_SSTABLE * expectedNumberOfSSTables(version),
+                                REPLICA_COUNT * FILES_PER_SSTABLE * EXPECTED_NUMBER_OF_SSTABLES,
                                 new CountDownLatch(0));
     }
 
@@ -561,16 +560,5 @@ class RecordWriterTest
         return Arrays.stream(CassandraVersion.supportedVersions())
                      .map(version -> new Object[]{version})
                      .collect(Collectors.toList());
-    }
-
-    private int expectedNumberOfSSTables(String version)
-    {
-        CassandraVersion cassandraVersion = CassandraVersion.fromVersion(version).orElseThrow();
-        if (CassandraVersion.HCDONEZERO.equals(cassandraVersion))
-        {
-            // HCD 1.x CQLSSTableWriter ignores maximum buffer limit when sorted option has been selected
-            return 1;
-        }
-        return EXPECTED_NUMBER_OF_SSTABLES;
     }
 }

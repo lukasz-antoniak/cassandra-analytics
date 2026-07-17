@@ -43,8 +43,6 @@ else
   #   ext.cassandraFullVersionMap = ["4.0": "4.0.17", "4.1": "4.1.4", "5.0": "5.0.5"]
   # NOTE: The following branches also need to remain in sync with CassandraVersion.java
   CANDIDATE_BRANCHES=(
-    # HCD 1.x version
-    "main:8f317826cdb0747124929b768a67a9c23cc45f5b"
     # HCD 2.x version
     "main-5.0:deebade59f4bbfb9e126432e73870a0c4f2ebe11"
   )
