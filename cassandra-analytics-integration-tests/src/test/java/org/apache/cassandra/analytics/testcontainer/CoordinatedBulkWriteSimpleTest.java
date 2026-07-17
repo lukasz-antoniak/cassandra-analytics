@@ -94,7 +94,7 @@ public class CoordinatedBulkWriteSimpleTest extends CoordinatedWriteTestBase
             LOGGER.info("Both Sidecars are up. sidecar1 port1: {}, sidecar2 port1: {}", sidecar1.actualPort(), sidecar2.actualPort());
 
             SparkConf sparkConf = sparkTestUtils.defaultSparkConf();
-            sparkConf.set("spark.cassandra_analytics.bridge.disable_sstable_version_based", "true");
+            // sparkConf.set("spark.cassandra_analytics.bridge.disable_sstable_version_based", "true");
             SparkSession spark = SparkSession
                                  .builder()
                                  .config(sparkConf)

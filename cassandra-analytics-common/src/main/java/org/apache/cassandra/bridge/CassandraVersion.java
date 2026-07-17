@@ -77,8 +77,9 @@ public enum CassandraVersion
                new String[]{
                "big-na",
                "big-nb",
-               "bti-cb", // TODO(lantoniak): Verify. Did BTI SStable version change even in HCD 1 vs 2?
+               "bti-cb",
                }, 40),
+    // DataStax HCD 1.x and 2.x shall produce bti-cc sstables.
     HCDTWOZERO(50, "5.0.4.0", "hcd-two-zero", new String[]{"big", "bti"},
                new String[]{
                "big-oa",
