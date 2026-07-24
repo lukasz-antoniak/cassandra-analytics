@@ -19,6 +19,7 @@
 package org.apache.cassandra.sidecar.client;
 
 
+import java.util.Collections;
 import java.util.List;
 
 import io.vertx.core.Vertx;
@@ -51,7 +52,7 @@ public class VertxSidecarClientTest extends SidecarClientTest
                                                                            sidecarClientConfig.maxRetryDelayMillis());
 
         VertxHttpClient vertxHttpClient = new VertxHttpClient(vertx, httpClientConfig);
-        VertxRequestExecutor requestExecutor = new VertxRequestExecutor(vertxHttpClient);
+        VertxRequestExecutor requestExecutor = new VertxRequestExecutor(vertxHttpClient, Collections.emptyList());
         SimpleSidecarInstancesProvider instancesProvider = new SimpleSidecarInstancesProvider(instances);
         return new SidecarClient(instancesProvider, requestExecutor, sidecarClientConfig, defaultRetryPolicy);
     }

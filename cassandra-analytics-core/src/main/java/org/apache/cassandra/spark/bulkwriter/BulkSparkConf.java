@@ -24,6 +24,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.Serializable;
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -41,6 +43,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 
 import o.a.c.sidecar.client.shaded.client.SidecarInstance;
+import o.a.c.sidecar.client.shaded.client.interceptor.MessageInterceptor;
 import org.apache.cassandra.spark.bulkwriter.cloudstorage.StorageClientConfig;
 import org.apache.cassandra.spark.bulkwriter.cloudstorage.coordinated.CoordinatedWriteConf;
 import org.apache.cassandra.spark.bulkwriter.cloudstorage.coordinated.CoordinatedWriteConf.SimpleClusterConf;
@@ -126,6 +129,7 @@ public class BulkSparkConf implements Serializable
     public static final String SIDECAR_REQUEST_RETRY_DELAY_MILLIS      = SETTING_PREFIX + "sidecar.request.retries.delay.milliseconds";
     public static final String SIDECAR_REQUEST_MAX_RETRY_DELAY_MILLIS  = SETTING_PREFIX + "sidecar.request.retries.max.delay.milliseconds";
     public static final String SIDECAR_REQUEST_TIMEOUT_SECONDS         = SETTING_PREFIX + "sidecar.request.timeout.seconds";
+    public static final String SIDECAR_MESSAGE_INTERCEPTORS            = SETTING_PREFIX + "sidecar.message.interceptors";
     public static final String SKIP_CLEAN                              = SETTING_PREFIX + "job.skip_clean";
     public static final String USE_OPENSSL                             = SETTING_PREFIX + "use_openssl";
     // defines the max number of consecutive retries allowed in the ring monitor
@@ -174,6 +178,7 @@ public class BulkSparkConf implements Serializable
     // create sidecarInstances from sidecarContactPointsValue and effectiveSidecarPort
     private final String sidecarContactPointsValue; // It takes comma separated values
     private transient Set<SidecarInstance> sidecarContactPoints; // not serialized
+    private transient List<MessageInterceptor> sidecarMessageInterceptors; // not serialized
     protected final String coordinatedWriteConfJson;
     private transient CoordinatedWriteConf coordinatedWriteConf; // it is transient; deserialized from coordinatedWriteConfJson in executors
 
@@ -247,6 +252,7 @@ public class BulkSparkConf implements Serializable
                                                            storageClientEndpointOverride,
                                                            nioHttpClientConnectionAcquisitionTimeoutSeconds,
                                                            nioHttpClientMaxConcurrency);
+        this.sidecarMessageInterceptors = buildSidecarMessageInterceptors();
         DataTransport dataTransport = MapUtils.getEnumOption(options, WriterOptions.DATA_TRANSPORT.name(), DataTransport.DIRECT, "Data Transport");
         long maxSizePerSSTableBundleInBytesS3Transport = MapUtils.getLong(options, WriterOptions.MAX_SIZE_PER_SSTABLE_BUNDLE_IN_BYTES_S3_TRANSPORT.name(),
                                                                           DEFAULT_MAX_SIZE_PER_SSTABLE_BUNDLE_IN_BYTES_S3_TRANSPORT);
@@ -390,6 +396,34 @@ public class BulkSparkConf implements Serializable
         }
 
         return CoordinatedWriteConf.create(coordinatedWriteConfJson, consistencyLevel, SimpleClusterConf.class);
+    }
+
+    protected List<MessageInterceptor> buildSidecarMessageInterceptors()
+    {
+        String interceptorsConf = conf.get(SIDECAR_MESSAGE_INTERCEPTORS);
+        if (StringUtils.isEmpty(interceptorsConf))
+        {
+            return Collections.emptyList();
+        }
+        Map<String, String> options = Arrays.stream(conf.getAll()).collect(Collectors.toMap(k -> k._1, v-> v._1));
+        List<MessageInterceptor> interceptors = new ArrayList<>();
+        for (String interceptorClazz : interceptorsConf.split(","))
+        {
+            try
+            {
+                MessageInterceptor instance = (MessageInterceptor) Class.forName(interceptorClazz)
+                                                                        .getDeclaredConstructor()
+                                                                        .newInstance();
+                instance.initialize(options);
+                interceptors.add(instance);
+            }
+            catch (ClassNotFoundException | ClassCastException | InvocationTargetException | InstantiationException
+                   | IllegalAccessException | NoSuchMethodException e)
+            {
+                throw new RuntimeException("Failed to instantiate message interceptor: " + interceptorClazz, e);
+            }
+        }
+        return interceptors;
     }
 
     protected void validateEnvironment() throws RuntimeException
@@ -580,6 +614,11 @@ public class BulkSparkConf implements Serializable
     public int getSidecarRequestTimeoutSeconds()
     {
         return getInt(SIDECAR_REQUEST_TIMEOUT_SECONDS, DEFAULT_SIDECAR_REQUEST_TIMEOUT_SECONDS);
+    }
+
+    public List<MessageInterceptor> getSidecarMessageInterceptors()
+    {
+        return sidecarMessageInterceptors;
     }
 
     public int getHttpConnectionTimeoutMs()

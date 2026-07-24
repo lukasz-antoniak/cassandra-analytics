@@ -20,7 +20,10 @@
 package org.apache.cassandra.sidecar.client;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 
+import org.apache.cassandra.sidecar.client.interceptor.MessageInterceptor;
 import org.apache.cassandra.sidecar.common.DataObjectBuilder;
 
 /**
@@ -33,12 +36,14 @@ public class SidecarClientConfigImpl implements SidecarClientConfig
     public static final long DEFAULT_MAX_RETRY_DELAY_MILLIS = 60_000L;
     public static final Duration DEFAULT_MINIMUM_HEALTH_RETRY_DELAY = Duration.ofSeconds(1L);
     public static final Duration DEFAULT_MAXIMUM_HEALTH_RETRY_DELAY = Duration.ofSeconds(5L);
+    public static final List<MessageInterceptor> DEFAULT_MESSAGE_INTERCEPTORS = Collections.emptyList();
 
     protected final int maxRetries;
     protected final long retryDelayMillis;
     protected final long maxRetryDelayMillis;
     protected final Duration minimumHealthRetryDelay;
     protected final Duration maximumHealthRetryDelay;
+    protected final List<MessageInterceptor> messageInterceptors;
 
     private SidecarClientConfigImpl(Builder builder)
     {
@@ -47,6 +52,7 @@ public class SidecarClientConfigImpl implements SidecarClientConfig
         maxRetryDelayMillis = builder.maxRetryDelayMillis;
         minimumHealthRetryDelay = builder.minimumHealthRetryDelay;
         maximumHealthRetryDelay = builder.maximumHealthRetryDelay;
+        messageInterceptors = builder.messageInterceptors;
     }
 
     /**
@@ -94,6 +100,12 @@ public class SidecarClientConfigImpl implements SidecarClientConfig
         return maximumHealthRetryDelay;
      }
 
+     @Override
+     public List<MessageInterceptor> messageInterceptors()
+     {
+         return messageInterceptors;
+     }
+
     public static Builder builder()
     {
         return new Builder();
@@ -109,6 +121,7 @@ public class SidecarClientConfigImpl implements SidecarClientConfig
         protected long maxRetryDelayMillis = DEFAULT_MAX_RETRY_DELAY_MILLIS;
         protected Duration minimumHealthRetryDelay = DEFAULT_MINIMUM_HEALTH_RETRY_DELAY;
         protected Duration maximumHealthRetryDelay = DEFAULT_MAXIMUM_HEALTH_RETRY_DELAY;
+        protected List<MessageInterceptor> messageInterceptors = DEFAULT_MESSAGE_INTERCEPTORS;
 
         protected Builder()
         {
@@ -173,6 +186,11 @@ public class SidecarClientConfigImpl implements SidecarClientConfig
         public Builder maximumHealthRetryDelay(Duration maximumHealthRetryDelay)
         {
             return update(builder -> builder.maximumHealthRetryDelay = maximumHealthRetryDelay);
+        }
+
+        public Builder messageInterceptors(List<MessageInterceptor> messageInterceptors)
+        {
+            return update(builder -> builder.messageInterceptors = messageInterceptors);
         }
 
         /**

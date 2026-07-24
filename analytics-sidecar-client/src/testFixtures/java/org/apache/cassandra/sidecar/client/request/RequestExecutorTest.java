@@ -208,17 +208,17 @@ public abstract class RequestExecutorTest<T> extends BaseRequestTest
                                  InstanceSelectionPolicy policy,
                                  boolean async) throws Exception
     {
-        RequestContext requestContext = parameters.specificRequest(builder(policy)).build();
+        RequestContext.Builder requestContextBuilder = parameters.specificRequest(builder(policy));
         T responseObject;
         if (async)
         {
-            CompletableFuture<T> future = sidecarClient().executeRequestAsync(requestContext);
+            CompletableFuture<T> future = sidecarClient().executeRequestAsync(requestContextBuilder);
             responseObject = future.join();
             assertThat(future).isDone();
         }
         else
         {
-            responseObject = sidecarClient().executeRequest(requestContext, 20, TimeUnit.SECONDS);
+            responseObject = sidecarClient().executeRequest(requestContextBuilder, 20, TimeUnit.SECONDS);
         }
         assertThat(responseObject).isNotNull();
         parameters.validateResponse(responseObject);

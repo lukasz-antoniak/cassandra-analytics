@@ -18,7 +18,10 @@
 
 package org.apache.cassandra.sidecar.client;
 
+import java.util.List;
+
 import io.vertx.core.Vertx;
+import org.apache.cassandra.sidecar.client.interceptor.MessageInterceptor;
 
 import static java.util.Objects.requireNonNull;
 
@@ -29,9 +32,9 @@ public class SidecarClientVertxRequestExecutor extends VertxRequestExecutor
 {
     private final Vertx vertx;
 
-    public SidecarClientVertxRequestExecutor(VertxHttpClient httpClient)
+    public SidecarClientVertxRequestExecutor(VertxHttpClient httpClient, List<MessageInterceptor> interceptors)
     {
-        super(httpClient);
+        super(httpClient, interceptors);
         this.vertx = requireNonNull(httpClient.vertx(), "The vertx instance is required");
     }
 

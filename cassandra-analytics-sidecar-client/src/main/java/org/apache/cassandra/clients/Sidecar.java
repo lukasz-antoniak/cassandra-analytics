@@ -136,7 +136,7 @@ public final class Sidecar
                                                                            sidecarConfig.maxRetryDelayMillis());
 
         VertxHttpClient vertxHttpClient = new VertxHttpClient(vertx, httpClientConfig);
-        VertxRequestExecutor requestExecutor = new VertxRequestExecutor(vertxHttpClient);
+        VertxRequestExecutor requestExecutor = new VertxRequestExecutor(vertxHttpClient, sidecarConfig.messageInterceptors());
         return new SidecarClient(clusterConfig, requestExecutor, sidecarConfig, defaultRetryPolicy);
     }
 
