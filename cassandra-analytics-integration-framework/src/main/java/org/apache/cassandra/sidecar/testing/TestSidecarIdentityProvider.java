@@ -16,14 +16,17 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.sidecar.client.interceptor;
+package org.apache.cassandra.sidecar.testing;
 
-import org.apache.cassandra.sidecar.client.RequestContext;
+import o.a.c.sidecar.client.shaded.client.RequestContext;
+import o.a.c.sidecar.client.shaded.client.SidecarIdentityProvider;
 
-public class JwtMessageInterceptor implements MessageInterceptor
+public class TestSidecarIdentityProvider implements SidecarIdentityProvider
 {
-    public void onRequest(RequestContext.Builder requestBuilder)
+    @Override
+    public void injectCredentials(RequestContext.Builder builder)
     {
-        requestBuilder.addCustomHeader("my_header", "my_value");
+        builder.addCustomHeader(TestAuthenticationHandlerFactory.TestAuthHandler.USERNAME_HTTP_HEADER, "cassandra");
+        builder.addCustomHeader(TestAuthenticationHandlerFactory.TestAuthHandler.PASSWORD_HTTP_HEADER, "secret");
     }
 }

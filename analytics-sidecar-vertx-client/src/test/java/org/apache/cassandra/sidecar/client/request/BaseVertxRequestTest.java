@@ -18,8 +18,6 @@
 
 package org.apache.cassandra.sidecar.client.request;
 
-import java.util.Collections;
-
 import io.vertx.core.Vertx;
 import org.apache.cassandra.sidecar.client.HttpClientConfig;
 import org.apache.cassandra.sidecar.client.RequestExecutor;
@@ -40,7 +38,7 @@ public class BaseVertxRequestTest<T> extends RequestExecutorTest<T>
     @Override
     protected RequestExecutor sidecarClient()
     {
-        return new VertxRequestExecutor(this.httpClient(), Collections.emptyList());
+        return new VertxRequestExecutor(this.httpClient(), this.sidecarIdentityProvider());
     }
 
     @Override

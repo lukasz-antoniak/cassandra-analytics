@@ -19,7 +19,6 @@
 package org.apache.cassandra.sidecar.client;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -33,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.apache.cassandra.sidecar.client.interceptor.MessageInterceptor;
 import org.apache.cassandra.sidecar.common.request.Request;
 import org.apache.cassandra.sidecar.common.request.ResponseBytesDecoder;
 
@@ -48,12 +46,12 @@ public class RequestExecutor implements AutoCloseable
 
     protected final HttpClient httpClient;
     protected final ScheduledExecutorService singleThreadExecutorService;
-    protected final List<MessageInterceptor> interceptors;
+    protected final SidecarIdentityProvider identityProvider;
 
-    public RequestExecutor(HttpClient httpClient, List<MessageInterceptor> interceptors)
+    public RequestExecutor(HttpClient httpClient, SidecarIdentityProvider identityProvider)
     {
         this.httpClient = requireNonNull(httpClient, "The httpClient is required");
-        this.interceptors = requireNonNull(interceptors, "The interceptors shall not be null");
+        this.identityProvider = identityProvider;
         this.singleThreadExecutorService = Executors.newSingleThreadScheduledExecutor();
     }
 
@@ -104,19 +102,17 @@ public class RequestExecutor implements AutoCloseable
      */
     public <T> CompletableFuture<T> executeRequestAsync(RequestContext.Builder requestBuilder)
     {
-        interceptRequest(requestBuilder);
+        injectCredentials(requestBuilder);
         RequestContext context = requestBuilder.build();
         Iterator<SidecarInstance> iterator = context.instanceSelectionPolicy().iterator();
         CompletableFuture<T> resultFuture = new CompletableFuture<>();
         if (!iterator.hasNext())
         {
-            IllegalStateException error = new IllegalStateException("InstanceSelectionPolicy " +
-                                                                    context.instanceSelectionPolicy()
-                                                                           .getClass()
-                                                                           .getSimpleName() +
-                                                                    " selects 0 instances");
-            interceptFailure(context, error);
-            resultFuture.completeExceptionally(error);
+            resultFuture.completeExceptionally(new IllegalStateException("InstanceSelectionPolicy " +
+                                                                         context.instanceSelectionPolicy()
+                                                                                .getClass()
+                                                                                .getSimpleName() +
+                                                                         " selects 0 instances"));
             return resultFuture;
         }
         SidecarInstance instance = iterator.next();
@@ -138,18 +134,16 @@ public class RequestExecutor implements AutoCloseable
     public void streamRequest(RequestContext.Builder requestBuilder, StreamConsumer streamConsumer)
     {
         Objects.requireNonNull(streamConsumer, "streamConsumer must be non-null");
-        interceptRequest(requestBuilder);
+        injectCredentials(requestBuilder);
         RequestContext context = requestBuilder.build();
         Iterator<SidecarInstance> iterator = context.instanceSelectionPolicy().iterator();
         if (!iterator.hasNext())
         {
-            IllegalStateException error = new IllegalStateException("InstanceSelectionPolicy " +
-                                                                    context.instanceSelectionPolicy()
-                                                                           .getClass()
-                                                                           .getSimpleName() +
-                                                                    " selects 0 instances");
-            interceptFailure(context, error);
-            streamConsumer.onError(error);
+            streamConsumer.onError(new IllegalStateException("InstanceSelectionPolicy " +
+                                                             context.instanceSelectionPolicy()
+                                                                    .getClass()
+                                                                    .getSimpleName() +
+                                                             " selects 0 instances"));
             return;
         }
         SidecarInstance instance = iterator.next();
@@ -159,12 +153,7 @@ public class RequestExecutor implements AutoCloseable
         responseFuture.whenComplete(((response, throwable) -> {
             if (throwable != null)
             {
-                interceptFailure(context, throwable);
                 streamConsumer.onError(throwable);
-            }
-            else
-            {
-                interceptResponse(context, null, null);
             }
         }));
     }
@@ -363,7 +352,6 @@ public class RequestExecutor implements AutoCloseable
         if (throwable != null)
         {
             logger.error("Failed to process request={}, response={}", request, response, throwable);
-            interceptFailure(context, throwable);
             future.completeExceptionally(throwable);
             return;
         }
@@ -371,15 +359,17 @@ public class RequestExecutor implements AutoCloseable
         try
         {
             ResponseBytesDecoder<?> responseDecoder = request.responseBytesDecoder();
-            T responseObject = responseDecoder != null
-                               ? (T) responseDecoder.decode(response.raw())
-                               : (T) response.contentAsString();
-            interceptResponse(context, response, responseObject);
-            future.complete(responseObject);
+            if (responseDecoder != null)
+            {
+                future.complete((T) responseDecoder.decode(response.raw()));
+            }
+            else
+            {
+                future.complete((T) response.contentAsString());
+            }
         }
         catch (Throwable t)
         {
-            interceptFailure(context, t);
             future.completeExceptionally(t);
         }
     }
@@ -399,18 +389,11 @@ public class RequestExecutor implements AutoCloseable
         runnable.run();
     }
 
-    private void interceptRequest(RequestContext.Builder requestBuilder)
+    private void injectCredentials(RequestContext.Builder requestBuilder)
     {
-        interceptors.forEach(i -> i.onRequest(requestBuilder));
-    }
-
-    private void interceptResponse(RequestContext context, HttpResponse httpResponse, Object responseObject)
-    {
-        interceptors.forEach(i -> i.onResponse(context, httpResponse, responseObject));
-    }
-
-    private void interceptFailure(RequestContext context, Throwable error)
-    {
-        interceptors.forEach(i -> i.onFailure(context, error));
+        if (identityProvider != null)
+        {
+            identityProvider.injectCredentials(requestBuilder);
+        }
     }
 }

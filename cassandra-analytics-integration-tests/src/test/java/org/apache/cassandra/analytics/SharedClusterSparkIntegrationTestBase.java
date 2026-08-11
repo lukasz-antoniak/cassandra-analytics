@@ -151,7 +151,6 @@ public abstract class SharedClusterSparkIntegrationTestBase extends SharedCluste
         if (sparkConf == null)
         {
             sparkConf = sparkTestUtils.defaultSparkConf();
-            sparkConf.set("spark.cassandra_analytics.sidecar.message.interceptors", "o.a.c.sidecar.client.shaded.client.interceptor.JwtMessageInterceptor");
         }
         return sparkConf;
     }

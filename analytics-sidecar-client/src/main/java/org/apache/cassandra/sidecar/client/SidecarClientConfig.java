@@ -20,9 +20,9 @@
 package org.apache.cassandra.sidecar.client;
 
 import java.time.Duration;
-import java.util.List;
+import java.util.Map;
 
-import org.apache.cassandra.sidecar.client.interceptor.MessageInterceptor;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Encapsulates configurations for the {@link SidecarClient}
@@ -54,5 +54,11 @@ public interface SidecarClientConfig
      */
      Duration maximumHealthRetryDelay();
 
-     List<MessageInterceptor> messageInterceptors();
+    /**
+     * @return implementation class of custom identity provider
+     */
+     @Nullable
+     String identityProviderClass();
+
+     Map<String, String> identityProviderParameters();
 }

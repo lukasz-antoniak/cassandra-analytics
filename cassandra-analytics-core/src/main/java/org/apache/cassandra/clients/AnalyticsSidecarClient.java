@@ -69,7 +69,7 @@ public class AnalyticsSidecarClient
                                .maxRetries(conf.getSidecarRequestRetries())
                                .retryDelayMillis(conf.getSidecarRequestRetryDelayMillis())
                                .maxRetryDelayMillis(conf.getSidecarRequestMaxRetryDelayMillis())
-                               .messageInterceptors(conf.getSidecarMessageInterceptors())
+                               .identityProvider(conf.getSidecarIdentityProviderClass(), conf.getSidecarIdentityProviderParameters())
                                .build();
 
         return Sidecar.buildClient(sidecarConfig, vertx, httpClientConfig, sidecarInstancesProvider);
