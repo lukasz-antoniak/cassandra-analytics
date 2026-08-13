@@ -55,6 +55,7 @@ public class CassandraTypesImplementation extends AbstractCassandraTypes
             // be set in DatabaseDescriptor before we can do that though, so we set one here in preparation.
             DatabaseDescriptor.setPartitionerUnsafe(Murmur3Partitioner.instance);
             Config config = new Config();
+            config.num_tokens = 1; // Required by DiskBoundaryManager.getDiskBoundaries()
             config.memtable_flush_writers = 8;
             config.diagnostic_events_enabled = false;
             config.max_mutation_size = new DataStorageSpec.IntKibibytesBound(config.commitlog_segment_size.toKibibytes() / 2);
