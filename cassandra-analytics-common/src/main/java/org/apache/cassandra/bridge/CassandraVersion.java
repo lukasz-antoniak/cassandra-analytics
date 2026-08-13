@@ -74,7 +74,7 @@ public enum CassandraVersion
              "bti-da",
              }, 40),
     // DataStax HCD 1.x and 2.x shall produce bti-cc sstables.
-    HCDTWOZERO(50, "5.0.4.0", "hcd-two-zero", new String[]{"big", "bti"},
+    HCDTWOZERO(50, "5.0.7.0", "hcd-two-zero", new String[]{"big", "bti"},
                new String[]{
                "big-oa",
                "bti-cc",
@@ -191,7 +191,7 @@ public enum CassandraVersion
 
         // NOTE: These default versions must stay in sync with cassandraFullVersionMap in build.gradle.
         String providedSupportedVersionsOrDefault = System.getProperty("cassandra.analytics.bridges.supported_versions",
-                                                                       "cassandra-5.0.4.0");
+                                                                       "cassandra-5.0.7.0");
         supportedVersions = Arrays.stream(providedSupportedVersionsOrDefault.split(","))
                                   .filter(version -> CassandraVersion.fromVersion(version)
                                                                      .filter(v -> v.sstableFormats().contains(configuredSSTableFormat))

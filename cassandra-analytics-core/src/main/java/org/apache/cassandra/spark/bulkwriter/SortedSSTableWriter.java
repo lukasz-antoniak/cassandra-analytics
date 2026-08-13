@@ -140,7 +140,7 @@ public class SortedSSTableWriter
     public String getPackageVersion(CassandraVersion bridgeVersion)
     {
         // Emit a major.minor.patch string (e.g. "cassandra-5.0.0") so it parses via CassandraVersionFeatures downstream
-        // DataStax Cassandra version does not need additional suffix, e.g. cassandra-5.0.4.0
+        // DataStax Cassandra version does not need additional suffix, e.g. cassandra-5.0.7.0
         String suffix = StringUtils.countMatches(bridgeVersion.versionName(), ".") <= 1 ? ".0" : "";
         return CASSANDRA_VERSION_PREFIX + bridgeVersion.versionName() + suffix;
     }

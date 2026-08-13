@@ -44,7 +44,7 @@ else
   # NOTE: The following branches also need to remain in sync with CassandraVersion.java
   CANDIDATE_BRANCHES=(
     # HCD 2.x version
-    "main-5.0:deebade59f4bbfb9e126432e73870a0c4f2ebe11"
+    "main-5.0:14b1d4c58e1e30a5d38ae4b18365ac2f6ed4f7ca"
   )
   BRANCHES=( ${BRANCHES:-main,main-5.0} )
   echo ${BRANCHES[*]}

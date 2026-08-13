@@ -42,6 +42,7 @@
                 <exclude name="META-INF/versions/20/**"/>
                 <exclude name="META-INF/versions/21/**"/>
                 <exclude name="META-INF/versions/22/**"/>
+                <exclude name="META-INF/versions/25/**"/>
             </fileset>
         </jar>
 
