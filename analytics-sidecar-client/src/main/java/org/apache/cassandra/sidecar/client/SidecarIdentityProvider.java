@@ -23,14 +23,16 @@ import java.util.Map;
 import org.jetbrains.annotations.ApiStatus;
 
 /**
- * Extension point for custom identity provider for Sidecar communication.
+ * An extension point for a custom identity provider for Sidecar communication.
  *
- * Identity provider is registered by specifying fully qualified class name
- * in {@code BulkSparkConf#SIDECAR_IDENTITY_PROVIDER} property. Implementations
- * have to provide no-arguments constructor. Initialization code shall be put in
- * {@link #initialize(Map, HttpClient)} method. Implementations must be thread-safe as methods
- * may be invoked concurrently from multiple worker threads. Try to invoke any
- * long running IO interaction outside of {@link #injectCredentials(RequestContext.Builder)} callback.
+ * <p>An identity provider is registered by specifying its fully qualified class name
+ * in the {@code BulkSparkConf#SIDECAR_IDENTITY_PROVIDER} property. Implementations
+ * must provide a no-argument constructor. Initialization code should be placed in the
+ * {@link #initialize(Map, HttpClient)} method.
+ *
+ * <p>Implementations must be thread-safe, as methods may be invoked concurrently from
+ * multiple worker threads. Avoid performing long-running I/O interactions inside the
+ * {@link #injectCredentials(RequestContext.Builder)} callback.
  */
 @ApiStatus.Experimental
 public interface SidecarIdentityProvider
@@ -38,21 +40,23 @@ public interface SidecarIdentityProvider
     SidecarIdentityProvider NOOP = requestBuilder -> {};
 
     /**
-     * Initializes identity provider. Method can be invoked form Spark driver and executors.
-     * @param options    Identity provider's options passed as part of Spark configuration (prefixed by
-     *                   {@code BulkSparkConf#SIDECAR_IDENTITY_PROVIDER_PARAMETER_PREFIX}). For example,
-     *                   {@code "spark.cassandra_analytics.sidecar.identity.provider.parameter.param1" = "value1"}
-     *                   will result in map {@code "param1" = "value1"}.
-     * @param httpClient HTTP client
+     * Initializes the identity provider. This method can be invoked from both the Spark driver and executors.
+     *
+     * @param options    the identity provider's options passed as part of the Spark configuration,
+     *                   prefixed by {@code BulkSparkConf#SIDECAR_IDENTITY_PROVIDER_PARAMETER_PREFIX}.
+     *                   For example, configuring {@code "spark.cassandra_analytics.sidecar.identity.provider.parameter.param1" = "value1"}
+     *                   will result in a map entry of {@code "param1" = "value1"}.
+     * @param httpClient the HTTP client used for communication
      */
     default void initialize(Map<String, String> options, HttpClient httpClient)
     {
     }
 
     /**
-     * Callback executed before request is build and send to Sidecar. Typical identity
-     * provider will add custom HTTP headers to the request.
-     * @param requestBuilder the request builder
+     * Callback executed before a request is built and sent to Sidecar.
+     * A typical implementation will inject custom HTTP headers or credentials into the request.
+     *
+     * @param requestBuilder the request builder used to construct the upcoming request
      */
     void injectCredentials(RequestContext.Builder requestBuilder);
 }

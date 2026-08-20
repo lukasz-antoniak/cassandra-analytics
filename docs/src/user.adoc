@@ -169,6 +169,13 @@ with the following structure:
 |
 |Name of the field to be appended to Spark RDD that represents last modification timestamp of each row
 
+|_identityProviderClass_
+|no
+|
+|The fully qualified class name that implements `org.apache.cassandra.sidecar.client.SidecarIdentityProvider`. A custom
+identity provider can modify HTTP requests sent to Cassandra Sidecar to inject authentication details. All configuration
+properties prefixed with `identityProviderParameter.` are automatically passed to the provider's initialization method.
+
 |===
 
 === Other Properties
