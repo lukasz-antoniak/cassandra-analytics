@@ -19,10 +19,18 @@
 
 package org.apache.cassandra.analytics;
 
+import java.util.function.Function;
+
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
 
+import org.apache.cassandra.sidecar.acl.authorization.AllowAllAuthorizationProvider;
+import org.apache.cassandra.sidecar.config.yaml.AccessControlConfigurationImpl;
+import org.apache.cassandra.sidecar.config.yaml.ParameterizedClassConfigurationImpl;
+import org.apache.cassandra.sidecar.config.yaml.SidecarConfigurationImpl;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
+import org.apache.cassandra.sidecar.testing.TestAuthenticationHandlerFactory;
 import org.apache.cassandra.sidecar.testing.TestSidecarIdentityProvider;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
@@ -46,21 +54,20 @@ class SidecarIdentityProviderTest extends SharedClusterSparkIntegrationTestBase
         createTestTable(TABLE_NAME, CREATE_TEST_TABLE_STATEMENT);
     }
 
-//    @Override
-//    protected Function<SidecarConfigurationImpl.Builder, SidecarConfigurationImpl.Builder> configurationOverrides()
-//    {
-//        return builder -> {
-//            ParameterizedClassConfigurationImpl authenticator =
-//            new ParameterizedClassConfigurationImpl(TestAuthenticationHandlerFactory.class.getName(), null);
-//            ParameterizedClassConfigurationImpl authorizer = new ParameterizedClassConfigurationImpl(AllowAllAuthorizationProvider.class.getName(), null);
-//            builder.accessControlConfiguration(AccessControlConfigurationImpl.builder()
-//                                                                             .enabled(true)
-//                                                                             .authenticatorsConfiguration(ImmutableList.of(authenticator))
-//                                                                             .authorizerConfiguration(authorizer)
-//                                                                             .build());
-//            return builder;
-//        };
-//    }
+    @Override
+    protected Function<SidecarConfigurationImpl.Builder, SidecarConfigurationImpl.Builder> configurationOverrides()
+    {
+        return builder -> {
+            ParameterizedClassConfigurationImpl authenticator = new ParameterizedClassConfigurationImpl(TestAuthenticationHandlerFactory.class.getName(), null);
+            ParameterizedClassConfigurationImpl authorizer = new ParameterizedClassConfigurationImpl(AllowAllAuthorizationProvider.class.getName(), null);
+            builder.accessControlConfiguration(AccessControlConfigurationImpl.builder()
+                                                                             .enabled(true)
+                                                                             .authenticatorsConfiguration(ImmutableList.of(authenticator))
+                                                                             .authorizerConfiguration(authorizer)
+                                                                             .build());
+            return builder;
+        };
+    }
 
     @Override
     protected SparkConf getOrCreateSparkConf()
