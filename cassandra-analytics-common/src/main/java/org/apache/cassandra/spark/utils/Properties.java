@@ -62,8 +62,8 @@ public final class Properties
     entry(FileType.PARTITIONS_INDEX,  4 * KIBI_BYTES),
     entry(FileType.ROWS_INDEX,        4 * KIBI_BYTES));
     public static final int DEFAULT_TIMEOUT_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10);
-    public static final String DEFAULT_IDENTITY_PROVIDER_CLASS = null;
-    public static final Map<String, String> DEFAULT_IDENTITY_PROVIDER_PARAMETERS = Collections.emptyMap();
+    public static final String DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS = null;
+    public static final Map<String, String> DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS = Collections.emptyMap();
 
     // Expansion and Shrink
     public static final Set<String> NODE_STATUS_NOT_CONSIDERED = new HashSet<>(Arrays.asList("JOINING", "DOWN"));

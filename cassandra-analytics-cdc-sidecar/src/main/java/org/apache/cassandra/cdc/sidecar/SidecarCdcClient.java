@@ -49,8 +49,8 @@ import org.apache.cassandra.spark.utils.streaming.StreamConsumer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import static org.apache.cassandra.spark.utils.Properties.DEFAULT_IDENTITY_PROVIDER_CLASS;
-import static org.apache.cassandra.spark.utils.Properties.DEFAULT_IDENTITY_PROVIDER_PARAMETERS;
+import static org.apache.cassandra.spark.utils.Properties.DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS;
+import static org.apache.cassandra.spark.utils.Properties.DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_BUFFER_OVERRIDE;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_BUFFER_SIZE;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_MILLIS_TO_SLEEP;
@@ -378,8 +378,8 @@ public class SidecarCdcClient implements AutoCloseable
                                        DEFAULT_CASSANDRA_ROLE,
                                        DEFAULT_MAX_BUFFER_OVERRIDE,
                                        chunkOverride,
-                                       DEFAULT_IDENTITY_PROVIDER_CLASS,
-                                       DEFAULT_IDENTITY_PROVIDER_PARAMETERS);
+                                       DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS,
+                                       DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS);
         }
 
         public static Map<FileType, Long> buildMaxBufferOverride(Map<String, String> options,

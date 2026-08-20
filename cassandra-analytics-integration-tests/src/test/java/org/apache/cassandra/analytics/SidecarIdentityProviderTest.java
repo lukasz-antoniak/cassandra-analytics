@@ -19,6 +19,7 @@
 
 package org.apache.cassandra.analytics;
 
+import java.util.Map;
 import java.util.function.Function;
 
 import com.google.common.collect.ImmutableList;
@@ -32,7 +33,6 @@ import org.apache.cassandra.sidecar.config.yaml.SidecarConfigurationImpl;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.sidecar.testing.TestAuthenticationHandlerFactory;
 import org.apache.cassandra.sidecar.testing.TestSidecarIdentityProvider;
-import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -69,26 +69,19 @@ class SidecarIdentityProviderTest extends SharedClusterSparkIntegrationTestBase
         };
     }
 
-    @Override
-    protected SparkConf getOrCreateSparkConf()
-    {
-        SparkConf conf = super.getOrCreateSparkConf();
-        conf.set("spark.cassandra_analytics.sidecar.identity.provider.class", TestSidecarIdentityProvider.class.getName());
-        return conf;
-    }
-
     @Test
     void testCustomIdentityProvider()
     {
+        Map<String, String> additionalOptions = ImmutableMap.of("sidecar_identity_provider_class",
+                                                                TestSidecarIdentityProvider.class.getName());
+
         SparkSession spark = getOrCreateSparkSession();
         Dataset<Row> df = DataGenerationUtils.generateCourseData(spark, ROW_COUNT);
-        bulkWriterDataFrameWriter(df, TABLE_NAME).save();
+        bulkWriterDataFrameWriter(df, TABLE_NAME, additionalOptions).save();
 
         sparkTestUtils.validateWrites(df.collectAsList(), queryAllData(TABLE_NAME));
 
-        Dataset<Row> read = bulkReaderDataFrame(TABLE_NAME,
-                                                ImmutableMap.of("identityProviderClass", TestSidecarIdentityProvider.class.getName()))
-                            .load();
+        Dataset<Row> read = bulkReaderDataFrame(TABLE_NAME, additionalOptions).load();
         assertThat(read.count()).isEqualTo(ROW_COUNT);
     }
 }

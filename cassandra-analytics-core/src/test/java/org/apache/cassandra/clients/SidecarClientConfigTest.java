@@ -120,8 +120,8 @@ public class SidecarClientConfigTest
     public void testCustomSidecarIdentityProvider()
     {
         String providerClass = "org.apache.cassandra.sidecar.client.TestIdentityProvider";
-        Sidecar.ClientConfig clientConfig = Sidecar.ClientConfig.create(ImmutableMap.of("identityproviderclass", providerClass,
-                                                                                        "identityproviderparameter.param1", "value1"));
+        Sidecar.ClientConfig clientConfig = Sidecar.ClientConfig.create(ImmutableMap.of("sidecar_identity_provider_class", providerClass,
+                                                                                        "sidecar_identity_provider_parameter.param1", "value1"));
         assertThat(clientConfig.identityProviderClass()).isEqualTo(providerClass);
         assertThat(clientConfig.identityProviderParameters()).isEqualTo(ImmutableMap.of("param1", "value1"));
     }

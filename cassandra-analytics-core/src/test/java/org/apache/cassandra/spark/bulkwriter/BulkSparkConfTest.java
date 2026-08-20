@@ -432,9 +432,8 @@ class BulkSparkConfTest
     {
         String providerClass = "org.apache.cassandra.sidecar.client.TestIdentityProvider";
         Map<String, String> options = copyDefaultOptions();
-        SparkConf sparkConf = new SparkConf()
-                              .set(BulkSparkConf.SIDECAR_IDENTITY_PROVIDER_CLASS, providerClass)
-                              .set(BulkSparkConf.SIDECAR_IDENTITY_PROVIDER_PARAMETER_PREFIX + "param1", "value1");
+        options.put(WriterOptions.SIDECAR_IDENTITY_PROVIDER_CLASS.name(), providerClass);
+        options.put(WriterOptions.SIDECAR_IDENTITY_PROVIDER_PARAMETER.name() + ".param1", "value1");
         BulkSparkConf bulkSparkConf = new BulkSparkConf(sparkConf, options, null);
         assertThat(bulkSparkConf.getSidecarIdentityProviderClass()).isEqualTo(providerClass);
         assertThat(bulkSparkConf.getSidecarIdentityProviderParameters()).isEqualTo(ImmutableMap.of("param1", "value1"));
@@ -444,7 +443,6 @@ class BulkSparkConfTest
     void testEmptySidecarIdentityProvider()
     {
         Map<String, String> options = copyDefaultOptions();
-        SparkConf sparkConf = new SparkConf();
         BulkSparkConf bulkSparkConf = new BulkSparkConf(sparkConf, options, null);
         assertThat(bulkSparkConf.getSidecarIdentityProviderClass()).isNull();
         assertThat(bulkSparkConf.getSidecarIdentityProviderParameters()).isEmpty();

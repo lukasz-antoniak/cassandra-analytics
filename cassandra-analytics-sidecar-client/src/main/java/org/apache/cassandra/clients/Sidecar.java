@@ -65,8 +65,8 @@ import org.jetbrains.annotations.Nullable;
 
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_CHUNK_BUFFER_OVERRIDE;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_CHUNK_BUFFER_SIZE;
-import static org.apache.cassandra.spark.utils.Properties.DEFAULT_IDENTITY_PROVIDER_CLASS;
-import static org.apache.cassandra.spark.utils.Properties.DEFAULT_IDENTITY_PROVIDER_PARAMETERS;
+import static org.apache.cassandra.spark.utils.Properties.DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS;
+import static org.apache.cassandra.spark.utils.Properties.DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_BUFFER_OVERRIDE;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_BUFFER_SIZE;
 import static org.apache.cassandra.spark.utils.Properties.DEFAULT_MAX_MILLIS_TO_SLEEP;
@@ -277,8 +277,8 @@ public final class Sidecar
         public static final String TIMEOUT_SECONDS_KEY = "timeoutSeconds";
         public static final String CASSANDRA_ROLE_KEY = "cassandra_role";
         public static final String DEFAULT_CASSANDRA_ROLE = null;
-        public static final String IDENTITY_PROVIDER_CLASS = "identityProviderClass";
-        public static final String IDENTITY_PROVIDER_PARAMETER_PREFIX = "identityProviderParameter.";
+        public static final String SIDECAR_IDENTITY_PROVIDER_CLASS = "sidecar_identity_provider_class";
+        public static final String SIDECAR_IDENTITY_PROVIDER_PARAMETER_PREFIX = "sidecar_identity_provider_parameter.";
 
         private final int userProvidedPort;
         private final int maxRetries;
@@ -429,8 +429,8 @@ public final class Sidecar
                                        DEFAULT_CASSANDRA_ROLE,
                                        DEFAULT_MAX_BUFFER_OVERRIDE,
                                        DEFAULT_CHUNK_BUFFER_OVERRIDE,
-                                       DEFAULT_IDENTITY_PROVIDER_CLASS,
-                                       DEFAULT_IDENTITY_PROVIDER_PARAMETERS);
+                                       DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS,
+                                       DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS);
         }
 
         public static ClientConfig create(Map<String, String> options)
@@ -447,8 +447,8 @@ public final class Sidecar
                           MapUtils.getOrDefault(options, CASSANDRA_ROLE_KEY, DEFAULT_CASSANDRA_ROLE),
                           buildMaxBufferOverride(options, DEFAULT_MAX_BUFFER_OVERRIDE),
                           buildChunkBufferOverride(options, DEFAULT_CHUNK_BUFFER_OVERRIDE),
-                          MapUtils.getOrDefault(options, IDENTITY_PROVIDER_CLASS, DEFAULT_IDENTITY_PROVIDER_CLASS),
-                          MapUtils.getKeysWithPrefix(options, IDENTITY_PROVIDER_PARAMETER_PREFIX, true, DEFAULT_IDENTITY_PROVIDER_PARAMETERS)
+                          MapUtils.getOrDefault(options, SIDECAR_IDENTITY_PROVIDER_CLASS, DEFAULT_SIDECAR_IDENTITY_PROVIDER_CLASS),
+                          MapUtils.getKeysWithPrefix(options, SIDECAR_IDENTITY_PROVIDER_PARAMETER_PREFIX, true, DEFAULT_SIDECAR_IDENTITY_PROVIDER_PARAMETERS)
             );
         }
 
