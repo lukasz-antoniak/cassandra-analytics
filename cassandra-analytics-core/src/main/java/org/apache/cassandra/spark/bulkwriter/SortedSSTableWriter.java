@@ -28,11 +28,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Range;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -209,17 +212,17 @@ public class SortedSSTableWriter
      *
      * @param writerContext the bulk writer context
      * @param sstables the set of SSTable descriptors to prepare
-     * @return a map of file paths to their digests, or an empty map if the writer is already closed
+     * @return an object containing list of prepared sstables, or {@link PreparedSSTables#EMPTY} if the writer is already closed
      * @throws IOException if an I/O error occurs
      */
-    public synchronized Map<Path, Digest> prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
+    public synchronized PreparedSSTables prepareSStablesToSend(@NotNull BulkWriterContext writerContext, Set<SSTableDescriptor> sstables) throws IOException
     {
         // If the writer is already closed, return empty map
         // The remaining SSTables will be handled by sendRemainingSSTables()
         if (isClosed)
         {
             LOGGER.debug("Writer is already closed, returning empty digest map. Remaining SSTables will be handled by sendRemainingSSTables()");
-            return Collections.emptyMap();
+            return PreparedSSTables.EMPTY;
         }
 
         // Filter for SSTables that match the requested descriptors AND haven't been hashed yet
@@ -227,8 +230,7 @@ public class SortedSSTableWriter
             SSTableDescriptor baseName = SSTables.getSSTableDescriptor(path);
             return sstables.contains(baseName) && !overallFileDigests.containsKey(path);
         };
-        Set<Path> dataFilePaths = new HashSet<>();
-        Map<Path, Digest> fileDigests = new HashMap<>();
+        PreparedSSTables preparedSSTables = new PreparedSSTables();
         // FIXME: CQLSSTableWriter may produce incomplete Filter.db file, rebuilding it manually (see CASSANDRA-21423).
         // rebuild Filter.db files before calculating their digest
         rebuildFilterComponents(writerContext, sstableFilter);
@@ -236,21 +238,23 @@ public class SortedSSTableWriter
         {
             for (Path path : stream)
             {
-                if (path.getFileName().toString().endsWith("-" + FileType.DATA.getFileSuffix()))
+                PreparedSSTable preparedSSTable = preparedSSTables.addIfAbsent(path);
+
+                if (isDataFile(path))
                 {
-                    dataFilePaths.add(path);
                     sstableCount += 1;
                 }
 
                 Digest digest = digestAlgorithm.calculateFileDigest(path);
-                fileDigests.put(path, digest);
+                preparedSSTable.addComponent(path, digest);
                 LOGGER.debug("Calculated digest={} for path={}", digest, path);
             }
         }
+        Map<Path, Digest> fileDigests = preparedSSTables.digests();
         bytesWritten += calculatedTotalSize(fileDigests.keySet());
         overallFileDigests.putAll(fileDigests);
-        validateSSTables(writerContext, getOutDir(), dataFilePaths);
-        return fileDigests;
+        validateSSTables(writerContext, getOutDir(), preparedSSTables.dataFiles());
+        return preparedSSTables;
     }
 
     /**
@@ -289,17 +293,23 @@ public class SortedSSTableWriter
         // FIXME: CQLSSTableWriter may produce incomplete Filter.db file, rebuilding it manually (see CASSANDRA-21423).
         rebuildFilterComponents(writerContext, unhashedFilter);
 
-        try (DirectoryStream<Path> dataFileStream = getDataFileStream(unhashedFilter))
+        try (DirectoryStream<Path> fileStream = Files.newDirectoryStream(getOutDir(), unhashedFilter))
         {
-            for (Path dataFile : dataFileStream)
+            for (Path path : fileStream)
             {
                 // NOTE: We calculate file hashes before re-reading so that we know what we hashed
                 //       is what we validated. Then we send these along with the files and the
                 //       receiving end re-hashes the files to make sure they still match.
-                Map<Path, Digest> newFileDigests = calculateFileDigestMap(dataFile);
-                overallFileDigests.putAll(newFileDigests);
-                newlyHashedFiles.addAll(newFileDigests.keySet());
-                sstableCount += 1;
+                Digest digest = digestAlgorithm.calculateFileDigest(path);
+                LOGGER.debug("Calculated digest={} for path={}", digest, path);
+
+                overallFileDigests.put(path, digest);
+                newlyHashedFiles.add(path);
+
+                if (isDataFile(path))
+                {
+                    sstableCount += 1;
+                }
             }
         }
         // Only calculate size for newly hashed files, not all files in overallFileDigests
@@ -388,27 +398,8 @@ public class SortedSSTableWriter
     private DirectoryStream<Path> getDataFileStream(DirectoryStream.Filter<Path> filter) throws IOException
     {
         // Combine the data file filter with the provided filter
-        DirectoryStream.Filter<Path> combinedFilter = path -> {
-            String fileName = path.getFileName().toString();
-            return fileName.endsWith("Data.db") && filter.accept(path);
-        };
+        DirectoryStream.Filter<Path> combinedFilter = path -> isDataFile(path) && filter.accept(path);
         return Files.newDirectoryStream(getOutDir(), combinedFilter);
-    }
-
-    private Map<Path, Digest> calculateFileDigestMap(Path dataFile) throws IOException
-    {
-        Map<Path, Digest> fileHashes = new HashMap<>();
-        try (DirectoryStream<Path> filesToHash =
-             Files.newDirectoryStream(dataFile.getParent(), SSTables.getSSTableBaseName(dataFile) + "*"))
-        {
-            for (Path path : filesToHash)
-            {
-                Digest digest = digestAlgorithm.calculateFileDigest(path);
-                fileHashes.put(path, digest);
-                LOGGER.debug("Calculated digest={} for path={}", digest, path);
-            }
-        }
-        return fileHashes;
     }
 
     private long calculatedTotalSize(Collection<Path> paths) throws IOException
@@ -437,5 +428,93 @@ public class SortedSSTableWriter
     public Map<Path, Digest> fileDigestMap()
     {
         return Collections.unmodifiableMap(overallFileDigests);
+    }
+
+    /**
+     * Helper class representing list of newly generated sstables.
+     */
+    public static class PreparedSSTables
+    {
+        private static final PreparedSSTables EMPTY = new PreparedSSTables();
+
+        private final Map<String, PreparedSSTable> sstables = new HashMap<>(); // indexed by base file name
+
+        public PreparedSSTable addIfAbsent(Path path)
+        {
+            String baseName = SSTables.getSSTableDescriptor(path).baseFilename;
+            return sstables.computeIfAbsent(baseName, (__) -> new PreparedSSTable());
+        }
+
+        /**
+         * @return all files from every generated sstable
+         */
+        public Set<Path> files()
+        {
+            return sstables.values().stream()
+                           .flatMap(c -> c.components.keySet().stream())
+                           .collect(Collectors.toSet());
+        }
+
+        /**
+         * @return data files from all sstables
+         */
+        public Set<Path> dataFiles()
+        {
+            return sstables.values().stream()
+                           .map(c -> c.dataFile)
+                           .collect(Collectors.toSet());
+        }
+
+        /**
+         * @return digests for all files from every generated sstable
+         */
+        public Map<Path, Digest> digests()
+        {
+            return sstables.values().stream()
+                           .map(c -> c.components)
+                           .flatMap(c -> c.entrySet().stream())
+                           .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        }
+
+        public Collection<PreparedSSTable> sstables()
+        {
+            return sstables.values();
+        }
+    }
+
+    public static class PreparedSSTable
+    {
+        private Path dataFile;
+        private final Map<Path, Digest> components = new HashMap<>();
+
+        public void addComponent(Path path, @Nullable Digest digest)
+        {
+            if (isDataFile(path))
+            {
+                dataFile = path;
+            }
+            components.put(path, digest);
+        }
+
+        /**
+         * @return path to data file
+         */
+        public Path dataFile()
+        {
+            return dataFile;
+        }
+
+        /**
+         * @return list of all sstable files
+         */
+        public List<Path> files()
+        {
+            return ImmutableList.copyOf(components.keySet());
+        }
+    }
+
+    private static boolean isDataFile(Path path)
+    {
+        return path.getFileName().toString().endsWith("-" + FileType.DATA.getFileSuffix());
     }
 }
