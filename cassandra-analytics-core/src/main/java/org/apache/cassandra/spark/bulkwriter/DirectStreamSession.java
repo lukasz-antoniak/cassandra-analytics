@@ -194,8 +194,16 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
             LOGGER.error("[{}]: Failed to stream range {} to instance {}",
                          sessionID, tokenRange, replica.nodeName(), exception);
             writerContext.cluster().refreshClusterInfo();
-            failureHandler.addFailure(this.tokenRange, replica, exception.getMessage());
-            errors.add(new StreamError(this.tokenRange, replica, exception.getMessage()));
+            // Sometimes error can contain just file name (e.g. when it is missing).
+            // Let us return 3 latest stacktrace lines for easier troubleshooting.
+            List<String> latestFrames = StackWalker.getInstance()
+                                                   .walk(stream -> stream.limit(3) // get the 3 closest (latest) frames
+                                                                         .map(StackWalker.StackFrame::toString)
+                                                                         .collect(Collectors.toList()));
+            String errorMessage = exception.getClass().getName() + ": " + exception.getMessage()
+                                  + "\n" + String.join("\n", latestFrames);
+            failureHandler.addFailure(this.tokenRange, replica, errorMessage);
+            errors.add(new StreamError(this.tokenRange, replica, errorMessage));
             clean(replica, sessionID);
             return false;
         }
