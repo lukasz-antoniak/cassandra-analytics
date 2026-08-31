@@ -102,6 +102,7 @@ public class SortedSSTableWriter
 
     // Fields protected by synchronization - accessed from both RecordWriter thread and executor threads
     private final Map<Path, Digest> overallFileDigests = new HashMap<>();
+    private PreparedSSTables remainingSSTablesAfterClose = PreparedSSTables.EMPTY;
     private boolean isClosed = false;
     private int sstableCount = 0;
     private long bytesWritten = 0;
@@ -293,6 +294,8 @@ public class SortedSSTableWriter
         // FIXME: CQLSSTableWriter may produce incomplete Filter.db file, rebuilding it manually (see CASSANDRA-21423).
         rebuildFilterComponents(writerContext, unhashedFilter);
 
+        PreparedSSTables prepared = new PreparedSSTables();
+
         try (DirectoryStream<Path> fileStream = Files.newDirectoryStream(getOutDir(), unhashedFilter))
         {
             for (Path path : fileStream)
@@ -306,12 +309,16 @@ public class SortedSSTableWriter
                 overallFileDigests.put(path, digest);
                 newlyHashedFiles.add(path);
 
+                prepared.addIfAbsent(path)
+                        .addComponent(path, digest);
+
                 if (isDataFile(path))
                 {
                     sstableCount += 1;
                 }
             }
         }
+        remainingSSTablesAfterClose = prepared;
         // Only calculate size for newly hashed files, not all files in overallFileDigests
         // (previously hashed files may have been deleted by prepareSStablesToSend)
         bytesWritten += calculatedTotalSize(newlyHashedFiles);
@@ -430,6 +437,11 @@ public class SortedSSTableWriter
         return Collections.unmodifiableMap(overallFileDigests);
     }
 
+    public PreparedSSTables remainingSSTablesAfterClose()
+    {
+        return remainingSSTablesAfterClose;
+    }
+
     /**
      * Helper class representing list of newly generated sstables.
      */
@@ -487,7 +499,7 @@ public class SortedSSTableWriter
         private Path dataFile;
         private final Map<Path, Digest> components = new HashMap<>();
 
-        public void addComponent(Path path, @Nullable Digest digest)
+        public void addComponent(Path path, Digest digest)
         {
             if (isDataFile(path))
             {

@@ -150,24 +150,15 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
     @Override
     protected void sendRemainingSSTables()
     {
-        SortedSSTableWriter.PreparedSSTables preparedSSTables = new SortedSSTableWriter.PreparedSSTables();
-        try (DirectoryStream<Path> fileStream = Files.newDirectoryStream(sstableWriter.getOutDir()))
+        try
         {
-            for (Path path : fileStream)
-            {
-                if (isFileStreamed(path))
-                {
-                    // the file is already streamed or being streamed; skipping it
-                    continue;
-                }
-                SortedSSTableWriter.PreparedSSTable preparedSSTable = preparedSSTables.addIfAbsent(path);
-                preparedSSTable.addComponent(path, null);
-            }
+            sstableWriter.remainingSSTablesAfterClose()
+                         .sstables()
+                         .forEach(this::sendSStableToReplicas);
 
-            preparedSSTables.sstables().forEach(this::sendSStableToReplicas);
             LOGGER.info("[{}]: Sent SSTables. sstables={}", sessionID, sstableWriter.sstableCount());
         }
-        catch (IOException exception)
+        catch (Exception exception)
         {
             LOGGER.error("[{}]: Unexpected exception while streaming SSTables {}",
                          sessionID, sstableWriter.getOutDir());
