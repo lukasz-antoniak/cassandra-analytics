@@ -21,13 +21,11 @@ package org.apache.cassandra.spark.bulkwriter;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -179,17 +177,16 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
         LOGGER.info("[{}]: Pushing SSTable {} to replicas {}",
                     sessionID, preparedSSTable.dataFile(),
                     replicas.stream().map(RingInstance::nodeName).collect(Collectors.joining(",")));
-        replicas.removeIf(replica -> !trySendSSTableToOneReplica(preparedSSTable, ssTableIdx, replica, sstableWriter.fileDigestMap()));
+        replicas.removeIf(replica -> !trySendSSTableToOneReplica(preparedSSTable, ssTableIdx, replica));
     }
 
     private boolean trySendSSTableToOneReplica(SortedSSTableWriter.PreparedSSTable preparedSSTable,
                                                int ssTableIdx,
-                                               RingInstance replica,
-                                               Map<Path, Digest> fileDigests)
+                                               RingInstance replica)
     {
         try
         {
-            sendSSTableToOneReplica(preparedSSTable, ssTableIdx, replica, fileDigests);
+            sendSSTableToOneReplica(preparedSSTable, ssTableIdx, replica);
             return true;
         }
         catch (Exception exception)
@@ -206,8 +203,7 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
 
     private void sendSSTableToOneReplica(SortedSSTableWriter.PreparedSSTable preparedSSTable,
                                          int ssTableIdx,
-                                         RingInstance instance,
-                                         Map<Path, Digest> fileHashes) throws IOException
+                                         RingInstance instance) throws IOException
     {
         for (Path componentFile : preparedSSTable.files())
         {
@@ -216,9 +212,9 @@ public class DirectStreamSession extends StreamSession<TransportContext.DirectDa
             {
                 continue;
             }
-            sendSSTableComponent(componentFile, ssTableIdx, instance, fileHashes.get(componentFile));
+            sendSSTableComponent(componentFile, ssTableIdx, instance, preparedSSTable.getDigest(componentFile));
         }
-        sendSSTableComponent(preparedSSTable.dataFile(), ssTableIdx, instance, fileHashes.get(preparedSSTable.dataFile()));
+        sendSSTableComponent(preparedSSTable.dataFile(), ssTableIdx, instance, preparedSSTable.getDigest(preparedSSTable.dataFile()));
     }
 
     private void sendSSTableComponent(Path componentFile,

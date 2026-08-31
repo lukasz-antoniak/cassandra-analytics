@@ -102,6 +102,7 @@ public class SortedSSTableWriter
 
     // Fields protected by synchronization - accessed from both RecordWriter thread and executor threads
     private final Map<Path, Digest> overallFileDigests = new HashMap<>();
+    // holds the list of newly created sstables after SSTableWriter.close() method was called
     private PreparedSSTables remainingSSTablesAfterClose = PreparedSSTables.EMPTY;
     private boolean isClosed = false;
     private int sstableCount = 0;
@@ -522,6 +523,16 @@ public class SortedSSTableWriter
         public List<Path> files()
         {
             return ImmutableList.copyOf(components.keySet());
+        }
+
+        /**
+         * @param path component path
+         * @return digest value, if it is known for given component
+         */
+        @Nullable
+        public Digest getDigest(Path path)
+        {
+            return components.get(path);
         }
     }
 
