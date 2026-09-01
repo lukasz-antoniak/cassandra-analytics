@@ -18,8 +18,8 @@
  */
 
 ext {
-    jacksonVersion="2.18.2"
-    jacksonScalaModuleVersion="2.18.2"
+    jacksonVersion="2.19.4"
+    jacksonScalaModuleVersion="2.19.4"
     scalaMajorVersion="2.13"
     scalaVersion="2.13.16"
     sparkGroupId="org.apache.spark"
