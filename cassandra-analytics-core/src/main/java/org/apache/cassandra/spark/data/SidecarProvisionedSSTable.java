@@ -21,8 +21,10 @@ package org.apache.cassandra.spark.data;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import o.a.c.sidecar.client.shaded.common.response.ListSnapshotFilesResponse;
 import o.a.c.sidecar.client.shaded.common.utils.HttpRange;
@@ -53,6 +55,8 @@ public class SidecarProvisionedSSTable extends SSTable
     private final String dataFileName;
     @NotNull
     private final Map<FileType, ListSnapshotFilesResponse.FileInfo> components;
+    @NotNull
+    private final Map<String, ListSnapshotFilesResponse.FileInfo> customComponents;
     private final int partitionId;
     private final Stats stats;
 
@@ -67,6 +71,22 @@ public class SidecarProvisionedSSTable extends SSTable
                                         int partitionId,
                                         Stats stats)
     {
+        this(sidecar, sidecarClientConfig, instance, keyspace, table, snapshotName,
+             components, Collections.emptyMap(), partitionId, stats);
+    }
+
+    // CHECKSTYLE IGNORE: Constructor with many parameters
+    protected SidecarProvisionedSSTable(SidecarClient sidecar,
+                                        Sidecar.ClientConfig sidecarClientConfig,
+                                        SidecarInstance instance,
+                                        String keyspace,
+                                        String table,
+                                        String snapshotName,
+                                        @NotNull Map<FileType, ListSnapshotFilesResponse.FileInfo> components,
+                                        @NotNull Map<String, ListSnapshotFilesResponse.FileInfo> customComponents,
+                                        int partitionId,
+                                        Stats stats)
+    {
         this.sidecar = sidecar;
         this.sidecarClientConfig = sidecarClientConfig;
         this.instance = instance;
@@ -74,6 +94,7 @@ public class SidecarProvisionedSSTable extends SSTable
         this.table = table;
         this.snapshotName = snapshotName;
         this.components = components;
+        this.customComponents = customComponents;
         this.partitionId = partitionId;
         this.stats = stats;
         String fileName = Objects.requireNonNull(components.get(FileType.DATA), "Data.db SSTable file component must exist").fileName;
@@ -129,6 +150,32 @@ public class SidecarProvisionedSSTable extends SSTable
     public boolean isMissing(FileType fileType)
     {
         return !components.containsKey(fileType);
+    }
+
+    @NotNull
+    @Override
+    public Set<String> customComponentNames()
+    {
+        return customComponents.keySet();
+    }
+
+    @Nullable
+    @Override
+    public InputStream openCustomComponent(@NotNull String componentName)
+    {
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        return snapshotFile == null ? null : open(snapshotFile, FileType.INDEX);
+    }
+
+    @Override
+    public long customComponentLength(@NotNull String componentName)
+    {
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        if (snapshotFile == null)
+        {
+            throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
+        }
+        return snapshotFile.size;
     }
 
     @Nullable

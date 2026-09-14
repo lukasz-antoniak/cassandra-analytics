@@ -20,6 +20,7 @@
 package org.apache.cassandra.spark.data;
 
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.spark.TestDataLayer;
+import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.apache.spark.sql.sources.And;
 import org.apache.spark.sql.sources.EqualNullSafe;
@@ -178,6 +180,37 @@ public class DataLayerUnsupportedPushDownFiltersTest
                 // Not supported
                 assertThat(unsupportedFilters).hasSize(1);
             }
+        });
+    }
+
+    @Test
+    public void testSaiFiltersArePruningHintsOnly()
+    {
+        runTest((partitioner, directory, bridge) -> {
+            TestSchema schema = TestSchema.basic(bridge);
+            List<Path> dataFiles = getFileType(directory, FileType.DATA).collect(Collectors.toList());
+            TestDataLayer dataLayer = new TestDataLayer(bridge, dataFiles, schema.buildTable())
+            {
+                @Override
+                public List<SaiIndex> saiIndexes()
+                {
+                    return Collections.singletonList(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()));
+                }
+            };
+
+            EqualTo equality = new EqualTo("c", 25);
+            GreaterThan lowerBound = new GreaterThan("C", 10);
+            Filter[] allFilters = {equality, lowerBound};
+
+            List<SaiFilter> saiFilters = dataLayer.saiFilters(allFilters);
+            assertThat(saiFilters).hasSize(2);
+            assertThat(saiFilters.get(0).operator()).isEqualTo(SaiFilter.Operator.EQ);
+            assertThat(saiFilters.get(0).value()).isEqualTo("25");
+            assertThat(saiFilters.get(1).operator()).isEqualTo(SaiFilter.Operator.GT);
+            assertThat(saiFilters.get(1).value()).isEqualTo("10");
+
+            // SAI is only an I/O pruning hint. Spark must still evaluate the predicates for correctness.
+            assertThat(dataLayer.unsupportedPushDownFilters(allFilters)).containsExactly(allFilters);
         });
     }
 

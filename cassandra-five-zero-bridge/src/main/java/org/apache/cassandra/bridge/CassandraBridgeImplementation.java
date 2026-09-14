@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -95,10 +96,13 @@ import org.apache.cassandra.spark.data.complex.CqlUdt;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
 import org.apache.cassandra.spark.reader.BtiIndexReader;
 import org.apache.cassandra.spark.reader.CompactionStreamScanner;
+import org.apache.cassandra.spark.reader.EmptyStreamScanner;
 import org.apache.cassandra.spark.reader.IndexEntry;
 import org.apache.cassandra.spark.reader.BigIndexReader;
 import org.apache.cassandra.spark.reader.ReaderUtils;
 import org.apache.cassandra.spark.reader.RowData;
+import org.apache.cassandra.spark.reader.SaiIndexReader;
+import org.apache.cassandra.spark.reader.SparkSSTableReader;
 import org.apache.cassandra.spark.reader.SchemaBuilder;
 import org.apache.cassandra.spark.reader.StreamScanner;
 import org.apache.cassandra.spark.reader.SummaryDbUtils;
@@ -106,6 +110,7 @@ import org.apache.cassandra.spark.sparksql.CellIterator;
 import org.apache.cassandra.spark.sparksql.RowIterator;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.PruneColumnFilter;
+import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
 import org.apache.cassandra.spark.sparksql.filters.SSTableTimeRangeFilter;
 import org.apache.cassandra.spark.utils.Pair;
@@ -127,6 +132,7 @@ import org.jetbrains.annotations.Nullable;
 @SuppressWarnings("unused")
 public class CassandraBridgeImplementation extends CassandraBridge
 {
+    private static final int MAX_SAI_CANDIDATE_PARTITIONS = 100000;
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraBridgeImplementation.class);
 
     private final Map<Class<?>, Serializer<?>> kryoSerializers;
@@ -225,6 +231,109 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                   .isRepairPrimary(isRepairPrimary)
                                                                   .build();
         }));
+    }
+
+    @Override
+    public StreamScanner<RowData> getCompactionScanner(@NotNull CqlTable table,
+                                                       @NotNull Partitioner partitioner,
+                                                       @NotNull SSTablesSupplier ssTables,
+                                                       @Nullable SparkRangeFilter sparkRangeFilter,
+                                                       @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
+                                                       @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
+                                                       @Nullable PruneColumnFilter columnFilter,
+                                                       @NotNull TimeProvider timeProvider,
+                                                       boolean readIndexOffset,
+                                                       boolean useIncrementalRepair,
+                                                       @NotNull Stats stats,
+                                                       @NotNull List<SaiFilter> saiFilters)
+    {
+        // A complete partition-key filter already gives a more selective and cheaper lookup than SAI.
+        if (!partitionKeyFilters.isEmpty() || saiFilters.isEmpty())
+        {
+            return getCompactionScanner(table, partitioner, ssTables, sparkRangeFilter, partitionKeyFilters,
+                                        sstableTimeRangeFilter, columnFilter, timeProvider, readIndexOffset,
+                                        useIncrementalRepair, stats);
+        }
+
+        SchemaBuilder schemaBuilder = new SchemaBuilder(table, partitioner);
+        TableMetadata metadata = schemaBuilder.tableMetaData();
+
+        // Select the replica/SSTable set once. SAI is used only to discover a global candidate partition-key set.
+        // Every selected SSTable is then read for those keys so normal Cassandra reconciliation can apply newer
+        // updates and tombstones that are not represented in an older SSTable's SAI index.
+        Set<SaiSSTableReference> references = ssTables.openAll(SaiSSTableReference::new);
+        if (references.isEmpty())
+        {
+            return EmptyStreamScanner.INSTANCE;
+        }
+
+        Set<SSTable> sstables = references.stream().map(reference -> reference.sstable).collect(Collectors.toSet());
+        Optional<Set<PartitionKeyFilter>> candidates = SaiIndexReader.findCandidatePartitionKeys(metadata,
+                                                                                                   sstables,
+                                                                                                   saiFilters,
+                                                                                                   sparkRangeFilter,
+                                                                                                   MAX_SAI_CANDIDATE_PARTITIONS);
+        Collection<PartitionKeyFilter> effectiveFilters = Collections.emptyList();
+        if (candidates.isPresent())
+        {
+            if (candidates.get().isEmpty())
+            {
+                return EmptyStreamScanner.INSTANCE;
+            }
+            effectiveFilters = candidates.get();
+        }
+
+        final Collection<PartitionKeyFilter> finalFilters = effectiveFilters;
+        Set<org.apache.cassandra.spark.reader.SSTableReader> readers = references.stream().map(reference -> {
+            try
+            {
+                return org.apache.cassandra.spark.reader.SSTableReader.builder(metadata, reference.sstable)
+                                                                      .withSparkRangeFilter(sparkRangeFilter)
+                                                                      .withPartitionKeyFilters(finalFilters)
+                                                                      .withTimeRangeFilter(sstableTimeRangeFilter)
+                                                                      .withColumnFilter(columnFilter)
+                                                                      .withReadIndexOffset(readIndexOffset)
+                                                                      .withStats(stats).useIncrementalRepair(useIncrementalRepair)
+                                                                      .isRepairPrimary(reference.isRepairPrimary)
+                                                                      .build();
+            }
+            catch (IOException e)
+            {
+                throw new RuntimeException("Failed to build SSTable reader for " + reference.sstable, e);
+            }
+        }).filter(reader -> !reader.ignore()).collect(Collectors.toSet());
+        return readers.isEmpty() ? EmptyStreamScanner.INSTANCE
+                                 : new CompactionStreamScanner(metadata, partitioner, timeProvider, readers);
+    }
+
+    private static final class SaiSSTableReference implements SparkSSTableReader
+    {
+        private final SSTable sstable;
+        private final boolean isRepairPrimary;
+
+        private SaiSSTableReference(@NotNull SSTable sstable, boolean isRepairPrimary)
+        {
+            this.sstable = sstable;
+            this.isRepairPrimary = isRepairPrimary;
+        }
+
+        @Override
+        public BigInteger firstToken()
+        {
+            return BigInteger.ZERO;
+        }
+
+        @Override
+        public BigInteger lastToken()
+        {
+            return BigInteger.ZERO;
+        }
+
+        @Override
+        public boolean ignore()
+        {
+            return false;
+        }
     }
 
     @Override

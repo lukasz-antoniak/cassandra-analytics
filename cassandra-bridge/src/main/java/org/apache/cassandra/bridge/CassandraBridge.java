@@ -59,6 +59,7 @@ import org.apache.cassandra.spark.reader.RowData;
 import org.apache.cassandra.spark.reader.StreamScanner;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.PruneColumnFilter;
+import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
 import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.spark.sparksql.filters.SSTableTimeRangeFilter;
@@ -95,6 +96,25 @@ public abstract class CassandraBridge
                                                                 boolean readIndexOffset,
                                                                 boolean useIncrementalRepair,
                                                                 @NotNull Stats stats);
+
+    // CHECKSTYLE IGNORE: Method with many parameters
+    public StreamScanner<RowData> getCompactionScanner(@NotNull CqlTable table,
+                                                       @NotNull Partitioner partitionerType,
+                                                       @NotNull SSTablesSupplier ssTables,
+                                                       @Nullable SparkRangeFilter sparkRangeFilter,
+                                                       @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
+                                                       @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
+                                                       @Nullable PruneColumnFilter columnFilter,
+                                                       @NotNull TimeProvider timeProvider,
+                                                       boolean readIndexOffset,
+                                                       boolean useIncrementalRepair,
+                                                       @NotNull Stats stats,
+                                                       @NotNull List<SaiFilter> saiFilters)
+    {
+        return getCompactionScanner(table, partitionerType, ssTables, sparkRangeFilter, partitionKeyFilters,
+                                    sstableTimeRangeFilter, columnFilter, timeProvider, readIndexOffset,
+                                    useIncrementalRepair, stats);
+    }
 
     public abstract StreamScanner<IndexEntry> getPartitionSizeIterator(@NotNull CqlTable table,
                                                                        @NotNull Partitioner partitioner,
