@@ -65,11 +65,16 @@ public class SparkCellIterator extends CellIterator
               partitionKeyFilters,
               dataLayer.sstableTimeRangeFilter(),
               (cqlTable) -> buildColumnFilter(requiredSchema, cqlTable),
-              (id, filters, timeRange, columnFilter) -> dataLayer.openCompactionScanner(id,
-                                                                                        filters,
-                                                                                        timeRange,
-                                                                                        columnFilter,
-                                                                                        saiFilters));
+              (id, filters, timeRange, columnFilter) -> saiFilters.isEmpty()
+                                                        ? dataLayer.openCompactionScanner(id,
+                                                                                          filters,
+                                                                                          timeRange,
+                                                                                          columnFilter)
+                                                        : dataLayer.openCompactionScanner(id,
+                                                                                          filters,
+                                                                                          timeRange,
+                                                                                          columnFilter,
+                                                                                          saiFilters));
         this.dataLayer = dataLayer;
         this.sparkTypes = new SparkType[cqlTable.numFields()];
         SparkSqlTypeConverter sparkSqlTypeConverter = ((SparkSqlTypeConverter) this.typeConverter);
