@@ -21,8 +21,10 @@ package org.apache.cassandra.spark.data;
 
 import java.io.InputStream;
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import com.google.common.base.Splitter;
 
@@ -93,6 +95,32 @@ public abstract class SSTable implements Serializable, CassandraFile
     public abstract long length(FileType fileType);
 
     public abstract boolean isMissing(FileType fileType);
+
+    /**
+     * Returns non-standard SSTable component file names exposed by this SSTable.
+     *
+     * SAI uses dynamically named custom components (for example, files beginning
+     * with {@code SAI+}) which cannot be represented by {@link FileType}.
+     */
+    @NotNull
+    public Set<String> customComponentNames()
+    {
+        return Collections.emptySet();
+    }
+
+    /**
+     * Opens a non-standard SSTable component by its complete file name.
+     */
+    @Nullable
+    public InputStream openCustomComponent(@NotNull String componentName)
+    {
+        return null;
+    }
+
+    public long customComponentLength(@NotNull String componentName)
+    {
+        throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
+    }
 
     public void verify() throws IncompleteSSTableException
     {

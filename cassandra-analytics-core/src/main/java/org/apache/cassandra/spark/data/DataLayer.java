@@ -43,13 +43,19 @@ import org.apache.cassandra.spark.reader.StreamScanner;
 import org.apache.cassandra.spark.sparksql.NoMatchFoundException;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.PruneColumnFilter;
+import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
 import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.spark.sparksql.filters.SSTableTimeRangeFilter;
 import org.apache.cassandra.spark.utils.TimeProvider;
+import org.apache.spark.sql.sources.And;
 import org.apache.spark.sql.sources.EqualTo;
 import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.sql.sources.GreaterThan;
+import org.apache.spark.sql.sources.GreaterThanOrEqual;
 import org.apache.spark.sql.sources.In;
+import org.apache.spark.sql.sources.LessThan;
+import org.apache.spark.sql.sources.LessThanOrEqual;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StructType;
@@ -275,6 +281,18 @@ public abstract class DataLayer implements Serializable
                                                         SSTableTimeRangeFilter sstableTimeRangeFilter,
                                                         @Nullable PruneColumnFilter columnFilter)
     {
+        return openCompactionScanner(partitionId, partitionKeyFilters, sstableTimeRangeFilter, columnFilter, Collections.emptyList());
+    }
+
+    /**
+     * Opens a compaction scanner with optional SAI predicates used only for physical SSTable pruning.
+     */
+    public StreamScanner<RowData> openCompactionScanner(int partitionId,
+                                                        List<PartitionKeyFilter> partitionKeyFilters,
+                                                        SSTableTimeRangeFilter sstableTimeRangeFilter,
+                                                        @Nullable PruneColumnFilter columnFilter,
+                                                        @NotNull List<SaiFilter> saiFilters)
+    {
         List<PartitionKeyFilter> filtersInRange;
         try
         {
@@ -295,7 +313,8 @@ public abstract class DataLayer implements Serializable
                                              timeProvider(),
                                              readIndexOffset(),
                                              useIncrementalRepair(),
-                                             stats());
+                                             stats(),
+                                             saiFilters);
     }
 
     /**
@@ -346,6 +365,144 @@ public abstract class DataLayer implements Serializable
         }
         // If the partition keys are not in the filter, we disable push down
         return partitionKeys.size() > 0 ? filters : unsupportedFilters.toArray(new Filter[0]);
+    }
+
+    /**
+     * @return SAI definitions available for this table. Implementations without SAI metadata return an empty list.
+     */
+    @NotNull
+    public List<SaiIndex> saiIndexes()
+    {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Extracts Spark predicates that can safely be used as SAI pruning hints.
+     *
+     * These predicates remain in {@link #unsupportedPushDownFilters(Filter[])} so Spark evaluates them after the
+     * Cassandra reader has reconciled all candidate partitions.
+     */
+    @NotNull
+    public List<SaiFilter> saiFilters(@NotNull Filter[] filters)
+    {
+        if (saiIndexes().isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        List<SaiFilter> result = new ArrayList<>();
+        for (Filter filter : filters)
+        {
+            collectSaiFilters(filter, result);
+        }
+        return result;
+    }
+
+    private void collectSaiFilters(@NotNull Filter filter, @NotNull List<SaiFilter> result)
+    {
+        if (filter instanceof And)
+        {
+            And and = (And) filter;
+            collectSaiFilters(and.left(), result);
+            collectSaiFilters(and.right(), result);
+            return;
+        }
+
+        String attribute = filterAttribute(filter);
+        Object value = filterValue(filter);
+        SaiFilter.Operator operator = saiOperator(filter);
+        if (attribute == null || value == null || operator == null)
+        {
+            return;
+        }
+
+        SaiIndex index = saiIndexes().stream()
+                                     .filter(candidate -> candidate.column().equals(attribute)
+                                                          || candidate.column().equalsIgnoreCase(attribute))
+                                     .findFirst()
+                                     .orElse(null);
+        if (index != null)
+        {
+            result.add(new SaiFilter(index, operator, String.valueOf(value)));
+        }
+    }
+
+    @Nullable
+    private static String filterAttribute(Filter filter)
+    {
+        if (filter instanceof EqualTo)
+        {
+            return ((EqualTo) filter).attribute();
+        }
+        if (filter instanceof GreaterThan)
+        {
+            return ((GreaterThan) filter).attribute();
+        }
+        if (filter instanceof GreaterThanOrEqual)
+        {
+            return ((GreaterThanOrEqual) filter).attribute();
+        }
+        if (filter instanceof LessThan)
+        {
+            return ((LessThan) filter).attribute();
+        }
+        if (filter instanceof LessThanOrEqual)
+        {
+            return ((LessThanOrEqual) filter).attribute();
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Object filterValue(Filter filter)
+    {
+        if (filter instanceof EqualTo)
+        {
+            return ((EqualTo) filter).value();
+        }
+        if (filter instanceof GreaterThan)
+        {
+            return ((GreaterThan) filter).value();
+        }
+        if (filter instanceof GreaterThanOrEqual)
+        {
+            return ((GreaterThanOrEqual) filter).value();
+        }
+        if (filter instanceof LessThan)
+        {
+            return ((LessThan) filter).value();
+        }
+        if (filter instanceof LessThanOrEqual)
+        {
+            return ((LessThanOrEqual) filter).value();
+        }
+        return null;
+    }
+
+    @Nullable
+    private static SaiFilter.Operator saiOperator(Filter filter)
+    {
+        if (filter instanceof EqualTo)
+        {
+            return SaiFilter.Operator.EQ;
+        }
+        if (filter instanceof GreaterThan)
+        {
+            return SaiFilter.Operator.GT;
+        }
+        if (filter instanceof GreaterThanOrEqual)
+        {
+            return SaiFilter.Operator.GTE;
+        }
+        if (filter instanceof LessThan)
+        {
+            return SaiFilter.Operator.LT;
+        }
+        if (filter instanceof LessThanOrEqual)
+        {
+            return SaiFilter.Operator.LTE;
+        }
+        return null;
     }
 
     /**
