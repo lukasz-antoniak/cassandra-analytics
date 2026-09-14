@@ -19,23 +19,28 @@
 
 package org.apache.cassandra.spark.reader;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +50,9 @@ import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.dht.AbstractBounds;
 import org.apache.cassandra.dht.Bounds;
+import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -56,6 +63,7 @@ import org.apache.cassandra.index.sai.disk.v1.PerColumnIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.segment.IndexSegmentSearcher;
 import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
+import org.apache.cassandra.index.sai.iterators.KeyRangeUnionIterator;
 import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.Descriptor;
@@ -71,11 +79,17 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Reads Cassandra 5 SAI components directly from an SSTable and returns candidate partition keys.
+ * Reads Cassandra 5 SAI components directly from SSTables and exposes matching partition keys as bounded batches.
  *
- * <p>The result is deliberately only a pruning hint. The caller must read each candidate partition from all
- * participating SSTables and use the normal compaction/reconciliation path before returning rows. This is required
- * because SAI does not represent all deletion/update state needed to reconcile multiple SSTables.</p>
+ * <p>SAI is deliberately only a pruning hint. Every candidate partition is still read from all participating
+ * SSTables and passed through the normal compaction/reconciliation path before rows are returned. This is required
+ * because a newer SSTable can contain an update or tombstone which is not a hit in its own SAI index.</p>
+ *
+ * <p>To avoid keeping every SAI index open for the lifetime of a Spark task, each SSTable owns a paged candidate
+ * source. A source materializes its SAI components once, but opens SAI readers only while filling a small in-memory
+ * page and closes them immediately afterwards. The globally sorted candidate stream is merged from those pages.
+ * Consequently, SAI reader/file-handle usage is bounded to one SSTable refill at a time, while candidate memory is
+ * bounded by the per-SSTable prefetch size plus the reconciliation batch.</p>
  */
 public final class SaiIndexReader
 {
@@ -89,28 +103,36 @@ public final class SaiIndexReader
     }
 
     /**
-     * Finds candidate partition keys for one SAI index across the supplied SSTables.
+     * Opens a streaming SAI candidate iterator over all supplied SSTables.
      *
-     * @return {@link Optional#empty()} when SAI cannot safely be used and the caller must fall back to a normal scan;
-     *         otherwise the complete candidate set (which may be empty)
+     * <p>Each SSTable is preflighted sequentially and only its first bounded page is retained in memory. This ensures
+     * missing/corrupt SAI components are detected before any rows can be emitted, so the caller can safely fall back
+     * to a normal SSTable scan. Later page failures are surfaced to the caller; falling back after rows have already
+     * been emitted could otherwise duplicate results.</p>
+     *
+     * @return {@link Optional#empty()} when SAI cannot safely be opened and the caller must fall back to a normal
+     *         scan; otherwise a closeable iterator that yields bounded, globally ordered candidate batches
      */
     @NotNull
-    public static Optional<Set<PartitionKeyFilter>> findCandidatePartitionKeys(@NotNull TableMetadata metadata,
-                                                                               @NotNull Set<SSTable> sstables,
-                                                                               @NotNull List<SaiFilter> filters,
-                                                                               @Nullable SparkRangeFilter sparkRangeFilter,
-                                                                               int maxCandidatePartitions)
+    public static Optional<CandidatePartitionIterator> openCandidatePartitionIterator(@NotNull TableMetadata metadata,
+                                                                                       @NotNull Set<SSTable> sstables,
+                                                                                       @NotNull List<SaiFilter> filters,
+                                                                                       @Nullable SparkRangeFilter sparkRangeFilter,
+                                                                                       int prefetchSize,
+                                                                                       int batchSize)
     {
+        validateSize("SAI candidate prefetch size", prefetchSize);
+        validateSize("SAI candidate batch size", batchSize);
+
         if (sstables.isEmpty() || filters.isEmpty())
         {
-            return Optional.of(new HashSet<>());
+            return Optional.of(CandidatePartitionIterator.empty(batchSize));
         }
 
         // Use one predicate as the physical pruning hint. Spark still evaluates every predicate after the scan,
-        // and using a single predicate avoids having to duplicate SAI's expression-normalization/planning logic here.
-        List<SaiFilter> selectedFilters = new ArrayList<>(1);
-        selectedFilters.add(filters.get(0));
-
+        // and using a single predicate avoids duplicating SAI's expression-normalization/planning logic here.
+        List<SaiFilter> selectedFilters = Collections.singletonList(filters.get(0));
+        List<CandidateSource> sources = new ArrayList<>(sstables.size());
         try
         {
             StorageAttachedIndex index = storageAttachedIndex(metadata, selectedFilters.get(0).index());
@@ -119,110 +141,450 @@ public final class SaiIndexReader
                 return Optional.empty();
             }
 
-            Set<PartitionKeyFilter> candidates = new HashSet<>();
+            Expression expression = Expression.create(index);
+            for (SaiFilter filter : selectedFilters)
+            {
+                expression.add(operator(filter.operator()), index.termType().fromString(filter.value()));
+            }
+
             for (SSTable sstable : sstables)
             {
-                Optional<Set<PartitionKeyFilter>> sstableCandidates = findCandidatePartitionKeys(metadata,
-                                                                                                   sstable,
-                                                                                                   index,
-                                                                                                   selectedFilters,
-                                                                                                   sparkRangeFilter);
-                if (!sstableCandidates.isPresent())
-                {
-                    return Optional.empty();
-                }
-
-                candidates.addAll(sstableCandidates.get());
-                if (candidates.size() > maxCandidatePartitions)
-                {
-                    LOGGER.debug("SAI candidate count {} exceeded limit {}; falling back to SSTable scan",
-                                 candidates.size(), maxCandidatePartitions);
-                    return Optional.empty();
-                }
+                sources.add(new PagedSSTableCandidateSource(metadata,
+                                                            sstable,
+                                                            index,
+                                                            expression,
+                                                            sparkRangeFilter,
+                                                            prefetchSize));
             }
-            return Optional.of(candidates);
+
+            // CandidatePartitionIterator.open() advances every source once. That performs all SAI preflight and
+            // first-page reads sequentially, so no two SSTables need open SAI search resources at the same time.
+            return Optional.of(CandidatePartitionIterator.open(sources, batchSize));
         }
         catch (Throwable throwable)
         {
-            // SAI is an optimization only. Any unsupported/corrupt/missing component must fail open to the
-            // existing SSTable scan so query correctness is unchanged.
+            closeSources(sources);
+            // SAI is an optimization only. Unsupported/corrupt/missing components detected before any rows are
+            // emitted fail open to the existing SSTable scan so query correctness is unchanged.
             LOGGER.warn("Unable to use SAI for SSTable pruning; falling back to normal SSTable scan", throwable);
             return Optional.empty();
         }
     }
 
-    private static Optional<Set<PartitionKeyFilter>> findCandidatePartitionKeys(@NotNull TableMetadata metadata,
-                                                                                 @NotNull SSTable sstable,
-                                                                                 @NotNull StorageAttachedIndex index,
-                                                                                 @NotNull List<SaiFilter> filters,
-                                                                                 @Nullable SparkRangeFilter sparkRangeFilter)
-    throws IOException
+    @VisibleForTesting
+    @NotNull
+    static CandidatePartitionIterator candidatePartitionIterator(@NotNull List<CandidateSource> sources,
+                                                                  int batchSize) throws IOException
     {
-        if (sstable.customComponentNames().isEmpty())
+        validateSize("SAI candidate batch size", batchSize);
+        return CandidatePartitionIterator.open(sources, batchSize);
+    }
+
+    private static void validateSize(@NotNull String name, int value)
+    {
+        if (value <= 0)
         {
-            return Optional.empty();
+            throw new IllegalArgumentException(name + " must be positive");
+        }
+    }
+
+    /**
+     * A sorted source of candidate partitions. Implementations keep at most one current candidate positioned.
+     */
+    @VisibleForTesting
+    interface CandidateSource extends Closeable
+    {
+        /**
+         * Advances to the next candidate partition.
+         *
+         * @return true when {@link #current()} is positioned, false when the source is exhausted
+         */
+        boolean advance() throws IOException;
+
+        @NotNull
+        PartitionKeyFilter current();
+    }
+
+    /**
+     * Per-SSTable candidate source. SAI readers are opened only inside {@link #loadNextPage()} and closed before the
+     * method returns; only the materialized component files and a bounded page of partition keys survive between
+     * calls.
+     */
+    private static final class PagedSSTableCandidateSource implements CandidateSource
+    {
+        @NotNull
+        private final TableMetadata metadata;
+        @NotNull
+        private final SSTable sstable;
+        @NotNull
+        private final StorageAttachedIndex index;
+        @NotNull
+        private final Expression expression;
+        @Nullable
+        private final SparkRangeFilter sparkRangeFilter;
+        private final int prefetchSize;
+        @NotNull
+        private final Deque<PartitionKeyFilter> buffered = new ArrayDeque<>();
+
+        @Nullable
+        private Path temporaryDirectory;
+        @Nullable
+        private Descriptor descriptor;
+        @Nullable
+        private IndexDescriptor indexDescriptor;
+        @NotNull
+        private List<SegmentMetadata> segments = Collections.emptyList();
+        @Nullable
+        private DecoratedKey resumeAfter;
+        @Nullable
+        private PartitionKeyFilter current;
+        private boolean initialized;
+        private boolean exhausted;
+        private boolean closed;
+
+        private PagedSSTableCandidateSource(@NotNull TableMetadata metadata,
+                                            @NotNull SSTable sstable,
+                                            @NotNull StorageAttachedIndex index,
+                                            @NotNull Expression expression,
+                                            @Nullable SparkRangeFilter sparkRangeFilter,
+                                            int prefetchSize)
+        {
+            this.metadata = metadata;
+            this.sstable = sstable;
+            this.index = index;
+            this.expression = expression;
+            this.sparkRangeFilter = sparkRangeFilter;
+            this.prefetchSize = prefetchSize;
         }
 
-        Path temporaryDirectory = Files.createTempDirectory("cassandra-analytics-sai-");
-        try
+        @Override
+        public boolean advance() throws IOException
         {
-            Descriptor descriptor = descriptor(metadata, sstable, temporaryDirectory);
-            IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
+            if (closed)
+            {
+                return false;
+            }
+
+            current = null;
+            while (buffered.isEmpty() && !exhausted)
+            {
+                loadNextPage();
+            }
+
+            if (buffered.isEmpty())
+            {
+                close();
+                return false;
+            }
+
+            current = buffered.removeFirst();
+            return true;
+        }
+
+        @Override
+        @NotNull
+        public PartitionKeyFilter current()
+        {
+            if (current == null)
+            {
+                throw new IllegalStateException("SAI candidate source is not positioned");
+            }
+            return current;
+        }
+
+        private void initialize() throws IOException
+        {
+            if (initialized)
+            {
+                return;
+            }
+            initialized = true;
+
+            if (sstable.customComponentNames().isEmpty())
+            {
+                throw new IOException("SSTable has no SAI custom components: " + sstable.getDataFileName());
+            }
+
+            temporaryDirectory = Files.createTempDirectory("cassandra-analytics-sai-");
+            descriptor = descriptor(metadata, sstable, temporaryDirectory);
+            indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
             materializeIndexComponents(sstable, indexDescriptor, index);
 
             if (!indexDescriptor.isPerSSTableIndexBuildComplete()
                 || !indexDescriptor.isPerColumnIndexBuildComplete(index.identifier()))
             {
-                return Optional.empty();
+                throw new IOException("SAI index components are incomplete for SSTable " + sstable.getDataFileName());
             }
 
             if (indexDescriptor.isIndexEmpty(index.termType(), index.identifier()))
             {
-                return Optional.of(new HashSet<>());
+                exhausted = true;
+                return;
             }
 
-            Expression expression = Expression.create(index);
-            for (SaiFilter filter : filters)
-            {
-                expression.add(operator(filter.operator()), index.termType().fromString(filter.value()));
-            }
-
-            Set<PartitionKeyFilter> candidates = new HashSet<>();
             MetadataSource metadataSource = MetadataSource.loadColumnMetadata(indexDescriptor, index.identifier());
-            List<SegmentMetadata> segments = SegmentMetadata.load(metadataSource, indexDescriptor.primaryKeyFactory);
-            QueryContext queryContext = new QueryContext(null, NO_TIMEOUT_MILLIS);
+            segments = SegmentMetadata.load(metadataSource, indexDescriptor.primaryKeyFactory);
+            exhausted = segments.isEmpty();
+        }
 
-            try (PrimaryKeyMap.Factory primaryKeyMapFactory = indexDescriptor.newPrimaryKeyMapFactory(null);
-                 PerColumnIndexFiles indexFiles = new PerColumnIndexFiles(indexDescriptor, index.termType(), index.identifier()))
+        private void loadNextPage() throws IOException
+        {
+            initialize();
+            if (exhausted)
             {
-                for (SegmentMetadata segment : segments)
+                return;
+            }
+
+            // All resources below are local to a single refill. No SAI searcher, PrimaryKeyMap, or index-file reader
+            // survives after this method returns, so refilling one source never holds another SSTable's SAI open.
+            List<IndexSegmentSearcher> searchers = new ArrayList<>();
+            List<KeyRangeIterator> segmentMatches = new ArrayList<>();
+            KeyRangeIterator matches = null;
+            try (PrimaryKeyMap.Factory primaryKeyMapFactory = indexDescriptor.newPrimaryKeyMapFactory(null);
+                 PerColumnIndexFiles indexFiles = new PerColumnIndexFiles(indexDescriptor,
+                                                                          index.termType(),
+                                                                          index.identifier()))
+            {
+                try
                 {
-                    Bounds<PartitionPosition> keyRange = new Bounds<>(segment.minKey.partitionKey(), segment.maxKey.partitionKey());
-                    try (IndexSegmentSearcher searcher = IndexSegmentSearcher.open(primaryKeyMapFactory,
-                                                                                    descriptor.id,
-                                                                                    indexFiles,
-                                                                                    segment,
-                                                                                    index);
-                         KeyRangeIterator matches = searcher.search(expression, keyRange, queryContext))
+                    QueryContext queryContext = new QueryContext(null, NO_TIMEOUT_MILLIS);
+                    for (SegmentMetadata segment : segments)
                     {
-                        while (matches.hasNext())
+                        AbstractBounds<PartitionPosition> keyRange = remainingRange(segment, resumeAfter);
+                        if (keyRange == null)
                         {
-                            PrimaryKey primaryKey = matches.next();
-                            DecoratedKey partitionKey = primaryKey.partitionKey();
-                            BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
-                            if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
+                            continue;
+                        }
+
+                        IndexSegmentSearcher searcher = IndexSegmentSearcher.open(primaryKeyMapFactory,
+                                                                                   descriptor.id,
+                                                                                   indexFiles,
+                                                                                   segment,
+                                                                                   index);
+                        searchers.add(searcher);
+                        segmentMatches.add(searcher.search(expression, keyRange, queryContext));
+                    }
+
+                    if (segmentMatches.isEmpty())
+                    {
+                        exhausted = true;
+                        return;
+                    }
+
+                    matches = KeyRangeUnionIterator.build(segmentMatches);
+                    // The union iterator owns/closes its child iterators from here on.
+                    segmentMatches.clear();
+
+                    DecoratedKey lastSeenInPage = null;
+                    boolean pageFull = false;
+                    while (matches.hasNext())
+                    {
+                        PrimaryKey primaryKey = matches.next();
+                        DecoratedKey partitionKey = primaryKey.partitionKey();
+                        if (lastSeenInPage != null && lastSeenInPage.equals(partitionKey))
+                        {
+                            continue;
+                        }
+
+                        lastSeenInPage = partitionKey;
+                        // Resume from an exclusive partition bound. If a wide partition has more matching clustering
+                        // rows than fit in this page, reopening the SAI search will skip the entire already-emitted
+                        // partition instead of returning it in the next reconciliation batch.
+                        resumeAfter = partitionKey;
+
+                        BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
+                        if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
+                        {
+                            buffered.addLast(PartitionKeyFilter.create(partitionKey.getKey().duplicate(), token));
+                            if (buffered.size() >= prefetchSize)
                             {
-                                candidates.add(PartitionKeyFilter.create(partitionKey.getKey().duplicate(), token));
+                                pageFull = true;
+                                break;
                             }
                         }
                     }
+
+                    // If the page was not filled, every remaining segment iterator was exhausted and there cannot be
+                    // a later match for this SSTable. A page that fills exactly at EOF may cause one harmless refill.
+                    exhausted = !pageFull;
+                }
+                finally
+                {
+                    // Close iterators/searchers before their shared index files and PrimaryKeyMap factory are closed by
+                    // the surrounding try-with-resources block.
+                    closeQuietly(matches);
+                    for (KeyRangeIterator segmentMatch : segmentMatches)
+                    {
+                        closeQuietly(segmentMatch);
+                    }
+                    for (IndexSegmentSearcher searcher : searchers)
+                    {
+                        closeQuietly(searcher);
+                    }
                 }
             }
-            return Optional.of(candidates);
         }
-        finally
+
+        @Override
+        public void close()
         {
-            deleteRecursively(temporaryDirectory);
+            if (closed)
+            {
+                return;
+            }
+            closed = true;
+            buffered.clear();
+            current = null;
+            if (temporaryDirectory != null)
+            {
+                deleteRecursively(temporaryDirectory);
+                temporaryDirectory = null;
+            }
+        }
+    }
+
+    @Nullable
+    private static AbstractBounds<PartitionPosition> remainingRange(@NotNull SegmentMetadata segment,
+                                                                     @Nullable DecoratedKey resumeAfter)
+    {
+        DecoratedKey first = segment.minKey.partitionKey();
+        DecoratedKey last = segment.maxKey.partitionKey();
+        if (resumeAfter == null || resumeAfter.compareTo(first) < 0)
+        {
+            return new Bounds<>(first, last);
+        }
+        if (resumeAfter.compareTo(last) >= 0)
+        {
+            return null;
+        }
+        return new Range<>(resumeAfter, last);
+    }
+
+    /**
+     * Globally merges the sorted per-SSTable candidate sources and emits bounded reconciliation batches.
+     */
+    public static final class CandidatePartitionIterator implements PartitionKeyBatchIterator
+    {
+        @NotNull
+        private final List<CandidateSource> sources;
+        @NotNull
+        private final PriorityQueue<CandidateSource> candidates;
+        private final int batchSize;
+        private boolean closed;
+
+        private CandidatePartitionIterator(@NotNull List<CandidateSource> sources,
+                                           @NotNull PriorityQueue<CandidateSource> candidates,
+                                           int batchSize)
+        {
+            this.sources = sources;
+            this.candidates = candidates;
+            this.batchSize = batchSize;
+        }
+
+        @NotNull
+        private static CandidatePartitionIterator open(@NotNull List<CandidateSource> sources,
+                                                       int batchSize) throws IOException
+        {
+            List<CandidateSource> ownedSources = new ArrayList<>(sources);
+            PriorityQueue<CandidateSource> candidates = new PriorityQueue<>(Comparator.comparing(CandidateSource::current));
+            try
+            {
+                // Sequentially obtain one head candidate from each SSTable. PagedSSTableCandidateSource closes all
+                // SAI search handles before advance() returns, so only one SSTable's SAI is open at any instant.
+                for (CandidateSource source : ownedSources)
+                {
+                    if (source.advance())
+                    {
+                        candidates.add(source);
+                    }
+                    else
+                    {
+                        closeQuietly(source);
+                    }
+                }
+                return new CandidatePartitionIterator(ownedSources, candidates, batchSize);
+            }
+            catch (IOException | RuntimeException exception)
+            {
+                closeSources(ownedSources);
+                throw exception;
+            }
+        }
+
+        @NotNull
+        private static CandidatePartitionIterator empty(int batchSize)
+        {
+            return new CandidatePartitionIterator(Collections.emptyList(),
+                                                  new PriorityQueue<>(Comparator.comparing(CandidateSource::current)),
+                                                  batchSize);
+        }
+
+        /**
+         * Returns the next globally ordered batch of unique matching partition keys, or an empty list when exhausted.
+         */
+        @Override
+        @NotNull
+        public List<PartitionKeyFilter> nextBatch() throws IOException
+        {
+            if (closed)
+            {
+                return Collections.emptyList();
+            }
+
+            List<PartitionKeyFilter> batch = new ArrayList<>(batchSize);
+            try
+            {
+                while (batch.size() < batchSize && !candidates.isEmpty())
+                {
+                    CandidateSource first = candidates.poll();
+                    PartitionKeyFilter candidate = first.current();
+                    batch.add(candidate);
+
+                    // Consume this candidate from every SSTable before moving on. This globally deduplicates a
+                    // partition that appears in multiple SAI indexes without retaining an unbounded seen-key set.
+                    advancePast(first, candidate);
+                    while (!candidates.isEmpty() && candidates.peek().current().compareTo(candidate) == 0)
+                    {
+                        advancePast(candidates.poll(), candidate);
+                    }
+                }
+
+                if (candidates.isEmpty())
+                {
+                    close();
+                }
+                return batch;
+            }
+            catch (IOException | RuntimeException exception)
+            {
+                close();
+                throw exception;
+            }
+        }
+
+        private void advancePast(@NotNull CandidateSource source,
+                                 @NotNull PartitionKeyFilter emitted) throws IOException
+        {
+            while (source.advance())
+            {
+                if (source.current().compareTo(emitted) != 0)
+                {
+                    candidates.add(source);
+                    return;
+                }
+            }
+            closeQuietly(source);
+        }
+
+        @Override
+        public void close()
+        {
+            if (!closed)
+            {
+                closed = true;
+                candidates.clear();
+                closeSources(sources);
+            }
         }
     }
 
@@ -314,6 +676,30 @@ public final class SaiIndexReader
                 return Operator.GTE;
             default:
                 throw new IllegalArgumentException("Unsupported SAI operator: " + operator);
+        }
+    }
+
+    private static void closeSources(@NotNull List<? extends CandidateSource> sources)
+    {
+        for (CandidateSource source : sources)
+        {
+            closeQuietly(source);
+        }
+    }
+
+    private static void closeQuietly(@Nullable Closeable closeable)
+    {
+        if (closeable == null)
+        {
+            return;
+        }
+        try
+        {
+            closeable.close();
+        }
+        catch (Throwable throwable)
+        {
+            LOGGER.debug("Unable to close SAI search resource", throwable);
         }
     }
 
