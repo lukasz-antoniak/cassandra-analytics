@@ -105,10 +105,10 @@ public final class SaiIndexReader
      */
     @NotNull
     public static Optional<PartitionKeyBatchIterator> openCandidatePartitionIterator(@NotNull TableMetadata metadata,
-                                                                                      @NotNull Set<SSTable> sstables,
-                                                                                      @NotNull List<SaiFilter> filters,
-                                                                                      @Nullable SparkRangeFilter sparkRangeFilter,
-                                                                                      int batchSize)
+                                                                                     @NotNull Set<SSTable> sstables,
+                                                                                     @NotNull List<SaiFilter> filters,
+                                                                                     @Nullable SparkRangeFilter sparkRangeFilter,
+                                                                                     int batchSize)
     {
         assert batchSize > 0;
         if (sstables.isEmpty() || filters.isEmpty())
@@ -149,7 +149,9 @@ public final class SaiIndexReader
                 perIndexGlobalMatches.add(KeyRangeUnionIterator.build(perSSTableMatches));
             }
 
-            KeyRangeIntersectionIterator.Builder intersection = KeyRangeIntersectionIterator.builder(perIndexGlobalMatches.size(), 0, resources::close);
+            KeyRangeIntersectionIterator.Builder intersection = KeyRangeIntersectionIterator.builder(perIndexGlobalMatches.size(),
+                                                                                                     0,
+                                                                                                     resources::close);
             for (KeyRangeIterator matches : perIndexGlobalMatches)
             {
                 intersection.add(matches);
@@ -297,7 +299,8 @@ public final class SaiIndexReader
             SSTableResources resources = null;
             try
             {
-                Descriptor descriptor = descriptor(metadata, sstable, temporaryDirectory);
+                org.apache.cassandra.io.util.File dataFile = new org.apache.cassandra.io.util.File(temporaryDirectory.resolve(sstable.getDataFileName()));
+                Descriptor descriptor = Descriptor.fromFileWithComponent(dataFile, metadata.keyspace, metadata.name).left;
                 IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
                 materializeIndexComponents(sstable, indexDescriptor, plans);
 
@@ -594,15 +597,6 @@ public final class SaiIndexReader
         public void close()
         {
         }
-    }
-
-    @NotNull
-    private static Descriptor descriptor(@NotNull TableMetadata metadata,
-                                         @NotNull SSTable sstable,
-                                         @NotNull Path temporaryDirectory)
-    {
-        org.apache.cassandra.io.util.File dataFile = new org.apache.cassandra.io.util.File(temporaryDirectory.resolve(sstable.getDataFileName()));
-        return Descriptor.fromFileWithComponent(dataFile, metadata.keyspace, metadata.name).left;
     }
 
     private static void materializeIndexComponents(@NotNull SSTable sstable,
