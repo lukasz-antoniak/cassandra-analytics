@@ -21,14 +21,9 @@ package org.apache.cassandra.spark.reader;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,7 +46,6 @@ import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
-import org.apache.cassandra.index.sai.disk.format.IndexComponent;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.PerColumnIndexFiles;
@@ -130,8 +124,8 @@ public final class SaiIndexReader
             plan.collectResourcePlans(resourcePlansByIndex);
             List<IndexPlan> resourcePlans = new ArrayList<>(resourcePlansByIndex.values());
 
-            // Open/materialize every SAI component once. The resources remain live until the final result iterator
-            // is exhausted/closed, so advancing to the next Data.db batch never reopens SAI or skips prior postings.
+            // Open every SAI component once. The resources remain live until the final result iterator is
+            // exhausted/closed; their FileHandles perform positional Sidecar reads instead of local-file reads.
             List<SSTableResources> sstableResources = new ArrayList<>(sstables.size());
             for (SSTable sstable : sstables)
             {
@@ -458,19 +452,16 @@ public final class SaiIndexReader
     /** Holds all open native SAI resources for one SSTable. */
     private static final class SSTableResources implements Closeable
     {
-        private final Path temporaryDirectory;
         private final Descriptor descriptor;
         private final IndexDescriptor indexDescriptor;
         private final PrimaryKeyMap.Factory primaryKeyMapFactory;
         private final Map<StorageAttachedIndex, OpenColumnIndex> columns = new HashMap<>();
         private boolean closed;
 
-        private SSTableResources(Path temporaryDirectory,
-                                 Descriptor descriptor,
+        private SSTableResources(Descriptor descriptor,
                                  IndexDescriptor indexDescriptor,
                                  PrimaryKeyMap.Factory primaryKeyMapFactory)
         {
-            this.temporaryDirectory = temporaryDirectory;
             this.descriptor = descriptor;
             this.indexDescriptor = indexDescriptor;
             this.primaryKeyMapFactory = primaryKeyMapFactory;
@@ -486,14 +477,15 @@ public final class SaiIndexReader
                 throw new IOException("SSTable has no SAI components: " + sstable.getDataFileName());
             }
 
-            Path temporaryDirectory = Files.createTempDirectory("cassandra-analytics-sai-");
             SSTableResources resources = null;
             try
             {
-                org.apache.cassandra.io.util.File dataFile = new org.apache.cassandra.io.util.File(temporaryDirectory.resolve(sstable.getDataFileName()));
+                // Descriptor is still needed for Cassandra's SAI naming/ID logic, but this
+                // path is only an identifier. No file or directory is created or opened.
+                org.apache.cassandra.io.util.File dataFile = new org.apache.cassandra.io.util.File(".", sstable.getDataFileName());
                 Descriptor descriptor = Descriptor.fromFileWithComponent(dataFile, metadata.keyspace, metadata.name).left;
-                IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator);
-                materializeIndexComponents(sstable, indexDescriptor, plans);
+                IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator,
+                                                                         new SSTableIndexFileAccess(sstable));
 
                 if (!indexDescriptor.isPerSSTableIndexBuildComplete())
                 {
@@ -508,8 +500,7 @@ public final class SaiIndexReader
                     }
                 }
 
-                resources = new SSTableResources(temporaryDirectory,
-                                                 descriptor,
+                resources = new SSTableResources(descriptor,
                                                  indexDescriptor,
                                                  indexDescriptor.newPrimaryKeyMapFactory(null));
                 for (IndexPlan plan : plans)
@@ -523,10 +514,6 @@ public final class SaiIndexReader
                 if (resources != null)
                 {
                     resources.close();
-                }
-                else
-                {
-                    deleteRecursively(temporaryDirectory);
                 }
                 if (throwable instanceof IOException)
                 {
@@ -619,7 +606,6 @@ public final class SaiIndexReader
             }
             columns.clear();
             closeQuietly(primaryKeyMapFactory);
-            deleteRecursively(temporaryDirectory);
         }
     }
 
@@ -790,36 +776,6 @@ public final class SaiIndexReader
         }
     }
 
-    private static void materializeIndexComponents(@NotNull SSTable sstable,
-                                                   @NotNull IndexDescriptor indexDescriptor,
-                                                   @NotNull List<IndexPlan> plans) throws IOException
-    {
-        for (IndexComponent component : indexDescriptor.version.onDiskFormat()
-                                                               .perSSTableIndexComponents(indexDescriptor.hasClustering()))
-        {
-            copyIfPresent(sstable, indexDescriptor.fileFor(component));
-        }
-        for (IndexPlan plan : plans)
-        {
-            for (IndexComponent component : indexDescriptor.version.onDiskFormat().perColumnIndexComponents(plan.index.termType()))
-            {
-                copyIfPresent(sstable, indexDescriptor.fileFor(component, plan.index.identifier()));
-            }
-        }
-    }
-
-    private static void copyIfPresent(@NotNull SSTable sstable,
-                                      @NotNull org.apache.cassandra.io.util.File destination) throws IOException
-    {
-        try (InputStream input = sstable.openCustomComponent(destination.name()))
-        {
-            if (input != null)
-            {
-                Files.copy(input, destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
-    }
-
     private static void closeAll(List<? extends Closeable> closeables)
     {
         for (Closeable closeable : closeables)
@@ -841,27 +797,6 @@ public final class SaiIndexReader
         catch (IOException exception)
         {
             LOGGER.debug("Unable to close SAI resource", exception);
-        }
-    }
-
-    private static void deleteRecursively(@NotNull Path path)
-    {
-        try (Stream<Path> paths = Files.walk(path))
-        {
-            paths.sorted(Comparator.reverseOrder()).forEach(current -> {
-                try
-                {
-                    Files.deleteIfExists(current);
-                }
-                catch (IOException exception)
-                {
-                    LOGGER.debug("Unable to delete temporary SAI file {}", current, exception);
-                }
-            });
-        }
-        catch (IOException exception)
-        {
-            LOGGER.debug("Unable to clean temporary SAI directory {}", path, exception);
         }
     }
 }

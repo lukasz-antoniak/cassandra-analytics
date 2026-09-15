@@ -19,8 +19,10 @@
 
 package org.apache.cassandra.spark.data;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -115,6 +117,68 @@ public abstract class SSTable implements Serializable, CassandraFile
     public InputStream openCustomComponent(@NotNull String componentName)
     {
         return null;
+    }
+
+    /**
+     * Reads a custom component at an absolute byte offset into {@code destination}.
+     * Implementations that can perform native range reads should override this method.
+     *
+     * <p>The method fills {@code destination} unless EOF is reached. This stronger
+     * contract is intentional: Cassandra's {@code SimpleChunkReader} performs a
+     * single positional {@code FileChannel.read()} for each chunk.</p>
+     *
+     * @return number of bytes read, or {@code -1} when {@code position} is at EOF
+     */
+    public int readCustomComponent(@NotNull String componentName,
+                                   long position,
+                                   @NotNull ByteBuffer destination) throws IOException
+    {
+        if (position < 0)
+        {
+            throw new IllegalArgumentException("position must be non-negative");
+        }
+        if (!destination.hasRemaining())
+        {
+            return 0;
+        }
+
+        try (InputStream input = openCustomComponent(componentName))
+        {
+            if (input == null)
+            {
+                return -1;
+            }
+
+            long skipped = 0;
+            while (skipped < position)
+            {
+                long count = input.skip(position - skipped);
+                if (count > 0)
+                {
+                    skipped += count;
+                    continue;
+                }
+                if (input.read() < 0)
+                {
+                    return -1;
+                }
+                skipped++;
+            }
+
+            int total = 0;
+            byte[] buffer = new byte[Math.min(8192, destination.remaining())];
+            while (destination.hasRemaining())
+            {
+                int count = input.read(buffer, 0, Math.min(buffer.length, destination.remaining()));
+                if (count < 0)
+                {
+                    break;
+                }
+                destination.put(buffer, 0, count);
+                total += count;
+            }
+            return total == 0 ? -1 : total;
+        }
     }
 
     public long customComponentLength(@NotNull String componentName)

@@ -19,7 +19,9 @@
 
 package org.apache.cassandra.spark.data;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
@@ -160,6 +162,46 @@ public class SidecarProvisionedSSTable extends SSTable
     }
 
     @Nullable
+
+    @Override
+    public int readCustomComponent(@NotNull String componentName,
+                                   long position,
+                                   @NotNull ByteBuffer destination) throws IOException
+    {
+        if (position < 0)
+        {
+            throw new IllegalArgumentException("position must be non-negative");
+        }
+        if (!destination.hasRemaining())
+        {
+            return 0;
+        }
+
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        if (snapshotFile == null || position >= snapshotFile.size)
+        {
+            return -1;
+        }
+
+        int requested = (int) Math.min((long) destination.remaining(), snapshotFile.size - position);
+        int originalLimit = destination.limit();
+        destination.limit(destination.position() + requested);
+        // BufferingInputStream treats source.size() as an absolute end offset when it starts
+        // at a non-zero position, so bounding size here prevents range prefetch past this read.
+        CassandraFileSource<SidecarProvisionedSSTable> source = source(snapshotFile,
+                                                                        FileType.INDEX,
+                                                                        position + requested);
+        try (BufferingInputStream<SidecarProvisionedSSTable> input =
+                 new BufferingInputStream<>(source, stats.bufferingInputStreamStats(), position))
+        {
+            return input.read(destination);
+        }
+        finally
+        {
+            destination.limit(originalLimit);
+        }
+    }
+
     @Override
     public InputStream openCustomComponent(@NotNull String componentName)
     {
@@ -203,6 +245,11 @@ public class SidecarProvisionedSSTable extends SSTable
      * @return an CassandraFileSource implementation that uses Sidecar client to request bytes
      */
     private CassandraFileSource<SidecarProvisionedSSTable> source(ListSnapshotFilesResponse.FileInfo fileInfo, FileType fileType)
+    {
+        return source(fileInfo, fileType, fileInfo.size);
+    }
+
+    private CassandraFileSource<SidecarProvisionedSSTable> source(ListSnapshotFilesResponse.FileInfo fileInfo, FileType fileType, long size)
     {
         SidecarProvisionedSSTable thisSSTable = this;
         return new CassandraFileSource<SidecarProvisionedSSTable>()
@@ -249,7 +296,7 @@ public class SidecarProvisionedSSTable extends SSTable
             @Override
             public long size()
             {
-                return fileInfo.size;
+                return size;
             }
         };
     }
