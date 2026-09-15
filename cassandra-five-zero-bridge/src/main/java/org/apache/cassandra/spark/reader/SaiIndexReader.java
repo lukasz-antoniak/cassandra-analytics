@@ -78,9 +78,10 @@ import org.jetbrains.annotations.Nullable;
  * Opens Cassandra 5 SAI components once for the lifetime of a Spark read partition and streams matching
  * primary keys from Cassandra's native SAI iterators.
  *
- * <p>For each indexed column, matches are first UNIONed across all SSTables. The resulting per-column streams are
- * then intersected. This ordering is important for correctness: values contributing to a logically reconciled row
- * may live in different SSTables. Intersecting inside each SSTable could therefore create false negatives.</p>
+ * <p>For every indexed predicate, matches are first UNIONed across all SSTables. The resulting global predicate
+ * streams are then composed using Cassandra's native SAI iterators: AND becomes intersection and OR becomes union.
+ * This ordering is important for correctness: values contributing to a logically reconciled row may live in
+ * different SSTables. Applying boolean composition inside each SSTable could therefore create false negatives.</p>
  *
  * <p>SAI is used only to identify candidate partitions. Each emitted partition batch must still be read from all
  * participating Data.db SSTables and passed through the normal Cassandra compaction/reconciliation path. Spark keeps
@@ -119,44 +120,29 @@ public final class SaiIndexReader
         ResourceGroup resources = new ResourceGroup();
         try
         {
-            List<IndexPlan> plans = buildPlans(metadata, filters);
-            if (plans.isEmpty())
+            PlanNode plan = buildPlan(metadata, filters);
+            if (plan == null)
             {
                 return Optional.empty();
             }
+
+            Map<StorageAttachedIndex, IndexPlan> resourcePlansByIndex = new LinkedHashMap<>();
+            plan.collectResourcePlans(resourcePlansByIndex);
+            List<IndexPlan> resourcePlans = new ArrayList<>(resourcePlansByIndex.values());
 
             // Open/materialize every SAI component once. The resources remain live until the final result iterator
             // is exhausted/closed, so advancing to the next Data.db batch never reopens SAI or skips prior postings.
             List<SSTableResources> sstableResources = new ArrayList<>(sstables.size());
             for (SSTable sstable : sstables)
             {
-                SSTableResources opened = SSTableResources.open(metadata, sstable, plans);
+                SSTableResources opened = SSTableResources.open(metadata, sstable, resourcePlans);
                 resources.add(opened);
                 sstableResources.add(opened);
             }
 
             QueryContext queryContext = new QueryContext(null, NO_TIMEOUT_MILLIS);
-            List<KeyRangeIterator> perIndexGlobalMatches = new ArrayList<>(plans.size());
-            for (IndexPlan plan : plans)
-            {
-                List<KeyRangeIterator> perSSTableMatches = new ArrayList<>(sstableResources.size());
-                for (SSTableResources resource : sstableResources)
-                {
-                    perSSTableMatches.add(resource.search(plan, queryContext));
-                }
-                // A logical row can be assembled from different SSTables. UNION the same predicate across SSTables
-                // before applying AND with predicates on other columns.
-                perIndexGlobalMatches.add(KeyRangeUnionIterator.build(perSSTableMatches));
-            }
-
-            KeyRangeIntersectionIterator.Builder intersection = KeyRangeIntersectionIterator.builder(perIndexGlobalMatches.size(),
-                                                                                                     0,
-                                                                                                     resources::close);
-            for (KeyRangeIterator matches : perIndexGlobalMatches)
-            {
-                intersection.add(matches);
-            }
-            KeyRangeIterator finalMatches = intersection.build();
+            KeyRangeIterator finalMatches = executePlan(plan, sstableResources, queryContext);
+            finalMatches.setOnClose(resources::close);
             return Optional.of(new CandidatePartitionIterator(finalMatches, resources, sparkRangeFilter, batchSize));
         }
         catch (Throwable throwable)
@@ -169,33 +155,193 @@ public final class SaiIndexReader
         }
     }
 
-    @NotNull
-    private static List<IndexPlan> buildPlans(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
+    @Nullable
+    private static PlanNode buildPlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
     {
-        Map<SaiIndex, List<SaiFilter>> grouped = new LinkedHashMap<>();
+        return buildAndPlan(metadata, filters);
+    }
+
+    @Nullable
+    private static PlanNode buildPlan(@NotNull TableMetadata metadata, @NotNull SaiFilter filter)
+    {
+        if (filter.kind() == SaiFilter.Kind.AND)
+        {
+            List<SaiFilter> conjuncts = new ArrayList<>();
+            collectConjuncts(filter, conjuncts);
+            return buildAndPlan(metadata, conjuncts);
+        }
+        if (filter.kind() == SaiFilter.Kind.OR)
+        {
+            PlanNode left = buildPlan(metadata, filter.left());
+            PlanNode right = buildPlan(metadata, filter.right());
+            return left == null || right == null
+                   ? null
+                   : combine(PlanNode.Kind.OR, java.util.Arrays.asList(left, right));
+        }
+        return buildPredicatePlan(metadata, Collections.singletonList(filter));
+    }
+
+    @Nullable
+    private static PlanNode buildAndPlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
+    {
+        List<SaiFilter> conjuncts = new ArrayList<>();
         for (SaiFilter filter : filters)
         {
-            grouped.computeIfAbsent(filter.index(), ignored -> new ArrayList<>()).add(filter);
+            collectConjuncts(filter, conjuncts);
         }
 
-        List<IndexPlan> plans = new ArrayList<>(grouped.size());
-        for (Map.Entry<SaiIndex, List<SaiFilter>> entry : grouped.entrySet())
+        Map<SaiIndex, List<SaiFilter>> groupedPredicates = new LinkedHashMap<>();
+        List<SaiFilter> complexTerms = new ArrayList<>();
+        for (SaiFilter conjunct : conjuncts)
         {
-            StorageAttachedIndex index = storageAttachedIndex(metadata, entry.getKey());
-            if (!canSearch(index, entry.getValue()))
+            if (conjunct.isPredicate())
             {
-                return Collections.emptyList();
+                groupedPredicates.computeIfAbsent(conjunct.index(), ignored -> new ArrayList<>()).add(conjunct);
+            }
+            else
+            {
+                complexTerms.add(conjunct);
+            }
+        }
+
+        List<PlanNode> children = new ArrayList<>(groupedPredicates.size() + complexTerms.size());
+        for (List<SaiFilter> predicates : groupedPredicates.values())
+        {
+            PlanNode predicate = buildPredicatePlan(metadata, predicates);
+            if (predicate == null)
+            {
+                return null;
+            }
+            children.add(predicate);
+        }
+        for (SaiFilter complexTerm : complexTerms)
+        {
+            PlanNode child = buildPlan(metadata, complexTerm);
+            if (child == null)
+            {
+                return null;
+            }
+            children.add(child);
+        }
+        return children.isEmpty() ? null : combine(PlanNode.Kind.AND, children);
+    }
+
+    private static void collectConjuncts(@NotNull SaiFilter filter, @NotNull List<SaiFilter> conjuncts)
+    {
+        if (filter.kind() == SaiFilter.Kind.AND)
+        {
+            collectConjuncts(filter.left(), conjuncts);
+            collectConjuncts(filter.right(), conjuncts);
+        }
+        else
+        {
+            conjuncts.add(filter);
+        }
+    }
+
+    @Nullable
+    private static PlanNode buildPredicatePlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
+    {
+        if (filters.isEmpty())
+        {
+            return null;
+        }
+        SaiIndex saiIndex = filters.get(0).index();
+        StorageAttachedIndex index = storageAttachedIndex(metadata, saiIndex);
+        if (!canSearch(index, filters))
+        {
+            return null;
+        }
+
+        Expression expression = Expression.create(index);
+        for (SaiFilter filter : filters)
+        {
+            expression.add(operator(filter.operator()), index.termType().fromString(filter.value()));
+        }
+        return PlanNode.predicate(new IndexPlan(index, expression));
+    }
+
+    @NotNull
+    private static PlanNode combine(@NotNull PlanNode.Kind kind, @NotNull List<PlanNode> children)
+    {
+        if (children.size() == 1)
+        {
+            return children.get(0);
+        }
+        return PlanNode.booleanNode(kind, children);
+    }
+
+    @NotNull
+    private static KeyRangeIterator executePlan(@NotNull PlanNode plan,
+                                                @NotNull List<SSTableResources> sstableResources,
+                                                @NotNull QueryContext queryContext) throws IOException
+    {
+        if (plan.kind == PlanNode.Kind.PREDICATE)
+        {
+            List<KeyRangeIterator> perSSTableMatches = new ArrayList<>(sstableResources.size());
+            try
+            {
+                for (SSTableResources resource : sstableResources)
+                {
+                    perSSTableMatches.add(resource.search(plan.predicate, queryContext));
+                }
+                // Always UNION a predicate across SSTables before composing boolean operators. A logical row may be
+                // assembled from values written in different SSTables, so per-SSTable boolean composition can create
+                // false negatives.
+                return KeyRangeUnionIterator.build(perSSTableMatches);
+            }
+            catch (Throwable throwable)
+            {
+                closeAll(perSSTableMatches);
+                rethrowSearchFailure("Unable to execute SAI predicate", throwable);
+                throw new AssertionError("unreachable");
+            }
+        }
+
+        List<KeyRangeIterator> children = new ArrayList<>(plan.children.size());
+        try
+        {
+            for (PlanNode child : plan.children)
+            {
+                children.add(executePlan(child, sstableResources, queryContext));
+            }
+            if (plan.kind == PlanNode.Kind.OR)
+            {
+                return KeyRangeUnionIterator.build(children);
             }
 
-            Expression expression = Expression.create(index);
-            for (SaiFilter filter : entry.getValue())
+            KeyRangeIntersectionIterator.Builder intersection = KeyRangeIntersectionIterator.builder(children.size(), 0);
+            for (KeyRangeIterator child : children)
             {
-                expression.add(operator(filter.operator()), index.termType().fromString(filter.value()));
+                intersection.add(child);
             }
-            plans.add(new IndexPlan(index, expression));
+            return intersection.build();
         }
-        return plans;
+        catch (Throwable throwable)
+        {
+            closeAll(children);
+            rethrowSearchFailure("Unable to execute SAI boolean plan", throwable);
+            throw new AssertionError("unreachable");
+        }
     }
+
+    private static void rethrowSearchFailure(String message, Throwable throwable) throws IOException
+    {
+        if (throwable instanceof IOException)
+        {
+            throw (IOException) throwable;
+        }
+        if (throwable instanceof RuntimeException)
+        {
+            throw (RuntimeException) throwable;
+        }
+        if (throwable instanceof Error)
+        {
+            throw (Error) throwable;
+        }
+        throw new IOException(message, throwable);
+    }
+
 
     private static boolean canSearch(@NotNull StorageAttachedIndex index, @NotNull List<SaiFilter> filters)
     {
@@ -249,6 +395,51 @@ public final class SaiIndexReader
                 return Operator.GTE;
             default:
                 throw new IllegalArgumentException("Unsupported SAI operator: " + operator);
+        }
+    }
+
+    private static final class PlanNode
+    {
+        private enum Kind
+        {
+            PREDICATE,
+            AND,
+            OR
+        }
+
+        private final Kind kind;
+        @Nullable
+        private final IndexPlan predicate;
+        private final List<PlanNode> children;
+
+        private PlanNode(Kind kind, @Nullable IndexPlan predicate, List<PlanNode> children)
+        {
+            this.kind = kind;
+            this.predicate = predicate;
+            this.children = children;
+        }
+
+        private static PlanNode predicate(IndexPlan predicate)
+        {
+            return new PlanNode(Kind.PREDICATE, predicate, Collections.emptyList());
+        }
+
+        private static PlanNode booleanNode(Kind kind, List<PlanNode> children)
+        {
+            return new PlanNode(kind, null, children);
+        }
+
+        private void collectResourcePlans(Map<StorageAttachedIndex, IndexPlan> plans)
+        {
+            if (kind == Kind.PREDICATE)
+            {
+                plans.putIfAbsent(predicate.index, predicate);
+                return;
+            }
+            for (PlanNode child : children)
+            {
+                child.collectResourcePlans(plans);
+            }
         }
     }
 

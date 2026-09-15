@@ -41,7 +41,6 @@ import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.spark.data.CassandraDataLayer;
 import org.apache.cassandra.testing.TestUtils;
-import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import static org.apache.cassandra.testing.TestUtils.DC1_RF1;
@@ -67,6 +66,7 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
 
     private static final CountingStats TEST_STATS = new CountingStats();
 
+    private long fullScanBytes = -1;
     private ClassReloadingStrategy strategy = null;
 
     @Override
@@ -110,8 +110,11 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         Arguments.of("eq", "score = " + MATCHING_SCORE, 2, 0.33),
         Arguments.of("gt", "score > 250", 8, 0.7),
         Arguments.of("between", "score > 250 AND score < 300", 5, 0.4),
-        Arguments.of("or", "score <= 2 OR score > 300", 3 + 3, 1),
-        Arguments.of("multi_column", "score = 778 AND state = 'changed'", 1, 0.1)
+        Arguments.of("or", "score <= 2 OR score > 300", 3 + 3, 0.5),
+        Arguments.of("or_or", "score <= 2 OR score > 300 OR score = 100", 3 + 3 + 1, 0.5),
+        Arguments.of("multi_column_or", "score = 778 OR state = 'new-match'", 2, 0.33),
+        Arguments.of("multi_column", "score = 778 AND state = 'changed'", 1, 0.1),
+        Arguments.of("overridden", "score = 777 AND state = 'change-score'", 0, 0.1) // not most recent value
         );
     }
 
@@ -119,30 +122,24 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
     @MethodSource("queryInputs")
     void testIndexUsage(String view, String whereClause, int expectedRows, double maxDataFileReadPercentage)
     {
-        // Baseline: full SSTable scan.
-        List<Row> allRows = bulkReaderDataFrame(TABLE).load()
+        calculateFullScanBaseline();
+
+        // Alternative pushdown filter with Spark SQL context:
+        // Dataset<Row> input = bulkReaderDataFrame(TABLE).load();
+        // input.createOrReplaceTempView("sai_reader_" + view);
+        // List<Row> matches = getOrCreateSparkSession().sql("SELECT id, score, state, payload "
+        //                                                   + "FROM sai_reader_" + view
+        //                                                   + " WHERE " + whereClause)
+        //                                              .collectAsList();
+
+        List<Row> matches = bulkReaderDataFrame(TABLE).load()
+                                                      .filter(whereClause)
                                                       .select("id", "score", "state", "payload")
                                                       .collectAsList();
-        assertThat(allRows).hasSize(BACKGROUND_ROWS + 3);
-
-        long fullScanBytes = TEST_STATS.readBytes();
-        assertThat(fullScanBytes).as("full scan should read a meaningful amount of Data.db")
-                                 .isGreaterThan(1024 * 1024);
-
-        // Actual SAI query.
-        TEST_STATS.reset();
-
-        Dataset<Row> input = bulkReaderDataFrame(TABLE).load();
-        input.createOrReplaceTempView("sai_reader_" + view);
-
-        List<Row> matches = getOrCreateSparkSession().sql("SELECT id, score, state, payload "
-                                                          + "FROM sai_reader_" + view
-                                                          + " WHERE " + whereClause)
-                                                     .collectAsList();
         assertThat(matches).hasSize(expectedRows);
 
         long saiReadBytes = TEST_STATS.readBytes();
-        // Important: prove we did not simply fall back to a full scan.
+        // Prove we did not simply fall back to a full scan.
         assertThat(saiReadBytes).as("SAI predicate should substantially reduce Data.db reads; fullScanBytes=%s saiReadBytes=%s", fullScanBytes, saiReadBytes)
                                 .isGreaterThan(0)
                                 .isLessThanOrEqualTo((int) (fullScanBytes * maxDataFileReadPercentage));
@@ -233,6 +230,23 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         char[] chars = new char[length];
         Arrays.fill(chars, 'x');
         return new String(chars);
+    }
+
+    private void calculateFullScanBaseline()
+    {
+        if (fullScanBytes < 0)
+        {
+            List<Row> allRows = bulkReaderDataFrame(TABLE).load()
+                                                          .select("id", "score", "state", "payload")
+                                                          .collectAsList();
+            assertThat(allRows).hasSize(BACKGROUND_ROWS + 3);
+
+            fullScanBytes = TEST_STATS.readBytes();
+            assertThat(fullScanBytes).as("full scan should read a meaningful amount of Data.db")
+                                     .isGreaterThan(1024 * 1024);
+
+            TEST_STATS.reset();
+        }
     }
 
     private static final class CountingStats extends Stats

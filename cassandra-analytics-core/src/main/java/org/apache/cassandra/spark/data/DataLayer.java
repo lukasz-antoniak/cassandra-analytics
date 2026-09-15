@@ -56,6 +56,7 @@ import org.apache.spark.sql.sources.GreaterThanOrEqual;
 import org.apache.spark.sql.sources.In;
 import org.apache.spark.sql.sources.LessThan;
 import org.apache.spark.sql.sources.LessThanOrEqual;
+import org.apache.spark.sql.sources.Or;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StructType;
@@ -393,19 +394,46 @@ public abstract class DataLayer implements Serializable
         List<SaiFilter> result = new ArrayList<>();
         for (Filter filter : filters)
         {
-            collectSaiFilters(filter, result);
+            SaiFilter saiFilter = toSaiFilter(filter);
+            if (saiFilter != null)
+            {
+                result.add(saiFilter);
+            }
         }
         return result;
     }
 
-    private void collectSaiFilters(@NotNull Filter filter, @NotNull List<SaiFilter> result)
+    /**
+     * Converts a Spark filter subtree to a safe SAI pruning expression.
+     *
+     * A partially-indexable AND can still use its indexable branch because every final match must satisfy that
+     * branch. A partially-indexable OR cannot be used for pruning because rows matching only the unsupported branch
+     * would otherwise be dropped.
+     */
+    @Nullable
+    private SaiFilter toSaiFilter(@NotNull Filter filter)
     {
         if (filter instanceof And)
         {
             And and = (And) filter;
-            collectSaiFilters(and.left(), result);
-            collectSaiFilters(and.right(), result);
-            return;
+            SaiFilter left = toSaiFilter(and.left());
+            SaiFilter right = toSaiFilter(and.right());
+            if (left == null)
+            {
+                return right;
+            }
+            if (right == null)
+            {
+                return left;
+            }
+            return SaiFilter.and(left, right);
+        }
+        if (filter instanceof Or)
+        {
+            Or or = (Or) filter;
+            SaiFilter left = toSaiFilter(or.left());
+            SaiFilter right = toSaiFilter(or.right());
+            return left == null || right == null ? null : SaiFilter.or(left, right);
         }
 
         String attribute = filterAttribute(filter);
@@ -413,7 +441,7 @@ public abstract class DataLayer implements Serializable
         SaiFilter.Operator operator = saiOperator(filter);
         if (attribute == null || value == null || operator == null)
         {
-            return;
+            return null;
         }
 
         SaiIndex index = saiIndexes().stream()
@@ -421,10 +449,7 @@ public abstract class DataLayer implements Serializable
                                                           || candidate.column().equalsIgnoreCase(attribute))
                                      .findFirst()
                                      .orElse(null);
-        if (index != null)
-        {
-            result.add(new SaiFilter(index, operator, String.valueOf(value)));
-        }
+        return index == null ? null : new SaiFilter(index, operator, String.valueOf(value));
     }
 
     @Nullable
