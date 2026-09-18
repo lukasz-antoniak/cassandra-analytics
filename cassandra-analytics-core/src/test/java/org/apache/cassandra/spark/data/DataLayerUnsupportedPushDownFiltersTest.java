@@ -20,6 +20,7 @@
 package org.apache.cassandra.spark.data;
 
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.bridge.CassandraBridge;
 import org.apache.cassandra.spark.TestDataLayer;
+import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.utils.test.TestSchema;
 import org.apache.spark.sql.sources.And;
 import org.apache.spark.sql.sources.EqualNullSafe;
@@ -178,6 +180,73 @@ public class DataLayerUnsupportedPushDownFiltersTest
                 // Not supported
                 assertThat(unsupportedFilters).hasSize(1);
             }
+        });
+    }
+
+    @Test
+    public void testSaiFiltersArePruningHintsOnly()
+    {
+        runTest((partitioner, directory, bridge) -> {
+            TestSchema schema = TestSchema.basic(bridge);
+            List<Path> dataFiles = getFileType(directory, FileType.DATA).collect(Collectors.toList());
+            TestDataLayer dataLayer = new TestDataLayer(bridge, dataFiles, schema.buildTable())
+            {
+                @Override
+                public List<SaiIndex> saiIndexes()
+                {
+                    return ImmutableList.of(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
+                                            new SaiIndex("d_idx", "d", "d", Collections.emptyMap()));
+                }
+            };
+
+            EqualTo equality = new EqualTo("c", 25);
+            GreaterThan lowerBound = new GreaterThan("C", 10);
+            LessThan otherColumn = new LessThan("d", 100);
+            Filter[] allFilters = {equality, lowerBound, otherColumn};
+
+            List<SaiFilter> saiFilters = dataLayer.saiFilters(allFilters);
+            assertThat(saiFilters).hasSize(3);
+            assertThat(saiFilters.get(0).operator()).isEqualTo(SaiFilter.Operator.EQ);
+            assertThat(saiFilters.get(0).value()).isEqualTo("25");
+            assertThat(saiFilters.get(1).operator()).isEqualTo(SaiFilter.Operator.GT);
+            assertThat(saiFilters.get(1).value()).isEqualTo("10");
+            assertThat(saiFilters.get(2).index().name()).isEqualTo("d_idx");
+            assertThat(saiFilters.get(2).operator()).isEqualTo(SaiFilter.Operator.LT);
+            assertThat(saiFilters.get(2).value()).isEqualTo("100");
+
+            // SAI is only an I/O pruning hint. Spark must still evaluate the predicates for correctness.
+            assertThat(dataLayer.unsupportedPushDownFilters(allFilters)).containsExactly(allFilters);
+
+            List<SaiFilter> nested = dataLayer.saiFilters(new Filter[]{new And(equality, otherColumn)});
+            assertThat(nested).hasSize(1);
+            assertThat(nested.get(0).kind()).isEqualTo(SaiFilter.Kind.AND);
+            assertThat(nested.get(0).left().index().name()).isEqualTo("c_idx");
+            assertThat(nested.get(0).right().index().name()).isEqualTo("d_idx");
+
+            List<SaiFilter> or = dataLayer.saiFilters(new Filter[]{new Or(equality, otherColumn)});
+            assertThat(or).hasSize(1);
+            assertThat(or.get(0).kind()).isEqualTo(SaiFilter.Kind.OR);
+            assertThat(or.get(0).left().index().name()).isEqualTo("c_idx");
+            assertThat(or.get(0).right().index().name()).isEqualTo("d_idx");
+
+            List<SaiFilter> nestedBoolean = dataLayer.saiFilters(new Filter[]{new And(new Or(equality, otherColumn),
+                                                                                      lowerBound)});
+            assertThat(nestedBoolean).hasSize(1);
+            assertThat(nestedBoolean.get(0).kind()).isEqualTo(SaiFilter.Kind.AND);
+            assertThat(nestedBoolean.get(0).left().kind()).isEqualTo(SaiFilter.Kind.OR);
+            assertThat(nestedBoolean.get(0).right().operator()).isEqualTo(SaiFilter.Operator.GT);
+
+            // An OR is only safe for pruning when every branch is SAI-capable.
+            List<SaiFilter> partialOr = dataLayer.saiFilters(new Filter[]{new Or(equality,
+                                                                                new StringContains("not_indexed", "x"))});
+            assertThat(partialOr).isEmpty();
+
+            // A partial AND may still use the SAI-capable branch as a conservative pruning hint.
+            List<SaiFilter> partialAnd = dataLayer.saiFilters(new Filter[]{new And(equality,
+                                                                                  new StringContains("not_indexed", "x"))});
+            assertThat(partialAnd).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
+                                                                 SaiFilter.Operator.EQ,
+                                                                 "25"));
         });
     }
 

@@ -25,6 +25,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
 
 import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.dht.IPartitioner;
@@ -44,6 +50,95 @@ final class IndexDbUtils
     private IndexDbUtils()
     {
         throw new IllegalStateException(getClass() + " is static utility class and shall not be instantiated");
+    }
+
+    @NotNull
+    public static List<DataDbRange> findDataDbRanges(@Nullable IndexSummary indexSummary,
+                                                     @NotNull Collection<TokenRange> ranges,
+                                                     @NotNull IPartitioner partitioner,
+                                                     @NotNull SSTable ssTable,
+                                                     @NotNull Stats stats) throws IOException
+    {
+        if (ranges.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        List<TokenRange> sortedRanges = new ArrayList<>(ranges);
+        sortedRanges.sort(Comparator.comparing(TokenRange::firstEnclosedValue));
+        long searchStartOffset = indexSummary == null
+                                 ? 0L
+                                 : SummaryDbUtils.findIndexOffsetInSummary(indexSummary,
+                                                                           partitioner,
+                                                                           sortedRanges.get(0).firstEnclosedValue());
+
+        try (InputStream is = ssTable.openPrimaryIndexStream())
+        {
+            if (is == null)
+            {
+                throw new IOException("Unable to open Index.db for " + ssTable.getDataFileName());
+            }
+
+            DataInputStream in = new DataInputStream(is);
+            ByteBufferUtils.skipFully(in, searchStartOffset);
+
+            List<DataDbRange> result = new ArrayList<>();
+            int rangeIndex = 0;
+            Long dataRangeStart = null;
+
+            while (rangeIndex < sortedRanges.size())
+            {
+                BigInteger token;
+                long dataPosition;
+                try
+                {
+                    token = readNextToken(partitioner, in, stats);
+                    dataPosition = ReaderUtils.readPosition(in);
+                    ReaderUtils.skipPromotedIndex(in);
+                }
+                catch (EOFException eof)
+                {
+                    break;
+                }
+
+                TokenRange range = sortedRanges.get(rangeIndex);
+                while (token.compareTo(range.upperEndpoint()) > 0)
+                {
+                    if (dataRangeStart != null)
+                    {
+                        result.add(new DataDbRange(dataRangeStart, dataPosition));
+                        dataRangeStart = null;
+                    }
+
+                    rangeIndex++;
+                    if (rangeIndex >= sortedRanges.size())
+                    {
+                        break;
+                    }
+                    range = sortedRanges.get(rangeIndex);
+                }
+
+                if (rangeIndex >= sortedRanges.size())
+                {
+                    break;
+                }
+
+                if (token.compareTo(range.lowerEndpoint()) > 0
+                    && token.compareTo(range.upperEndpoint()) <= 0
+                    && dataRangeStart == null)
+                {
+                    dataRangeStart = dataPosition;
+                }
+            }
+
+            if (dataRangeStart != null)
+            {
+                // No following Index.db entry was available to provide an exact end. The stream reader will stop at
+                // EOF (or its Spark token bound), so an unbounded final interval is safe.
+                result.add(new DataDbRange(dataRangeStart, Long.MAX_VALUE));
+            }
+            return DataDbRange.mergeAdjacent(result);
+        }
     }
 
     @Nullable

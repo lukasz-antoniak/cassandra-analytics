@@ -24,6 +24,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -54,6 +56,7 @@ import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.schema.TableMetadataRef;
 import org.apache.cassandra.spark.data.FileType;
 import org.apache.cassandra.spark.data.SSTable;
+import org.apache.cassandra.spark.reader.DataDbRange;
 import org.apache.cassandra.spark.reader.IndexConsumer;
 import org.apache.cassandra.spark.reader.IndexEntry;
 import org.apache.cassandra.spark.reader.ReaderUtils;
@@ -167,6 +170,51 @@ public class BtiReaderUtils
                         tokenRange, ssTable, e);
         }
         return offset.get();
+    }
+
+    @NotNull
+    public static List<DataDbRange> dataRangesInDataFile(@NotNull SSTable ssTable,
+                                                         @NotNull TableMetadata metadata,
+                                                         @NotNull Descriptor descriptor,
+                                                         @NotNull Collection<TokenRange> tokenRanges) throws IOException
+    {
+        if (tokenRanges.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        List<Range<Token>> ranges = new ArrayList<>(tokenRanges.size());
+        for (TokenRange tokenRange : tokenRanges)
+        {
+            Token tokenStart = TokenUtils.bigIntegerToToken(metadata.partitioner, tokenRange.lowerEndpoint());
+            Token tokenEnd = TokenUtils.bigIntegerToToken(metadata.partitioner, tokenRange.upperEndpoint());
+            ranges.add(new Range<>(tokenStart, tokenEnd));
+        }
+
+        List<DataDbRange> result = new ArrayList<>();
+        withPartitionIndex(ssTable, descriptor, metadata, (dataFileHandle, partitionFileHandle, rowFileHandle, partitionIndex) -> {
+            TableMetadataRef metadataRef = TableMetadataRef.forOfflineTools(metadata);
+            BtiTableReader btiTableReader = new BtiTableReader.Builder(descriptor)
+                                            .setDataFile(dataFileHandle)
+                                            .setPartitionIndex(partitionIndex)
+                                            .setRowIndexFile(rowFileHandle)
+                                            .setComponents(indexComponents)
+                                            .setTableMetadataRef(metadataRef)
+                                            .setFilter(FilterFactory.AlwaysPresent)
+                                            .build(null, false, false);
+            try
+            {
+                for (SSTableReader.PartitionPositionBounds positions : btiTableReader.getPositionsForRanges(ranges))
+                {
+                    result.add(new DataDbRange(positions.lowerPosition, positions.upperPosition));
+                }
+            }
+            finally
+            {
+                btiTableReader.selfRef().release();
+            }
+        });
+        return DataDbRange.mergeAdjacent(result);
     }
 
     public static void consumePrimaryIndex(@NotNull SSTable ssTable,

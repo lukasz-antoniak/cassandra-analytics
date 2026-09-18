@@ -19,10 +19,14 @@
 
 package org.apache.cassandra.spark.data;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import o.a.c.sidecar.client.shaded.common.response.ListSnapshotFilesResponse;
 import o.a.c.sidecar.client.shaded.common.utils.HttpRange;
@@ -53,6 +57,8 @@ public class SidecarProvisionedSSTable extends SSTable
     private final String dataFileName;
     @NotNull
     private final Map<FileType, ListSnapshotFilesResponse.FileInfo> components;
+    @NotNull
+    private final Map<String, ListSnapshotFilesResponse.FileInfo> customComponents;
     private final int partitionId;
     private final Stats stats;
 
@@ -67,6 +73,22 @@ public class SidecarProvisionedSSTable extends SSTable
                                         int partitionId,
                                         Stats stats)
     {
+        this(sidecar, sidecarClientConfig, instance, keyspace, table, snapshotName,
+             components, Collections.emptyMap(), partitionId, stats);
+    }
+
+    // CHECKSTYLE IGNORE: Constructor with many parameters
+    protected SidecarProvisionedSSTable(SidecarClient sidecar,
+                                        Sidecar.ClientConfig sidecarClientConfig,
+                                        SidecarInstance instance,
+                                        String keyspace,
+                                        String table,
+                                        String snapshotName,
+                                        @NotNull Map<FileType, ListSnapshotFilesResponse.FileInfo> components,
+                                        @NotNull Map<String, ListSnapshotFilesResponse.FileInfo> customComponents,
+                                        int partitionId,
+                                        Stats stats)
+    {
         this.sidecar = sidecar;
         this.sidecarClientConfig = sidecarClientConfig;
         this.instance = instance;
@@ -74,6 +96,7 @@ public class SidecarProvisionedSSTable extends SSTable
         this.table = table;
         this.snapshotName = snapshotName;
         this.components = components;
+        this.customComponents = customComponents;
         this.partitionId = partitionId;
         this.stats = stats;
         String fileName = Objects.requireNonNull(components.get(FileType.DATA), "Data.db SSTable file component must exist").fileName;
@@ -131,6 +154,72 @@ public class SidecarProvisionedSSTable extends SSTable
         return !components.containsKey(fileType);
     }
 
+    @NotNull
+    @Override
+    public Set<String> customComponentNames()
+    {
+        return customComponents.keySet();
+    }
+
+    @Nullable
+
+    @Override
+    public int readCustomComponent(@NotNull String componentName,
+                                   long position,
+                                   @NotNull ByteBuffer destination) throws IOException
+    {
+        if (position < 0)
+        {
+            throw new IllegalArgumentException("position must be non-negative");
+        }
+        if (!destination.hasRemaining())
+        {
+            return 0;
+        }
+
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        if (snapshotFile == null || position >= snapshotFile.size)
+        {
+            return -1;
+        }
+
+        int requested = (int) Math.min((long) destination.remaining(), snapshotFile.size - position);
+        int originalLimit = destination.limit();
+        destination.limit(destination.position() + requested);
+        // BufferingInputStream treats source.size() as an absolute end offset when it starts
+        // at a non-zero position, so bounding size here prevents range prefetch past this read.
+        CassandraFileSource<SidecarProvisionedSSTable> source = source(snapshotFile,
+                                                                        FileType.INDEX,
+                                                                        position + requested);
+        try (BufferingInputStream<SidecarProvisionedSSTable> input =
+                 new BufferingInputStream<>(source, stats.bufferingInputStreamStats(), position))
+        {
+            return input.read(destination);
+        }
+        finally
+        {
+            destination.limit(originalLimit);
+        }
+    }
+
+    @Override
+    public InputStream openCustomComponent(@NotNull String componentName)
+    {
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        return snapshotFile == null ? null : open(snapshotFile, FileType.INDEX);
+    }
+
+    @Override
+    public long customComponentLength(@NotNull String componentName)
+    {
+        ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
+        if (snapshotFile == null)
+        {
+            throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
+        }
+        return snapshotFile.size;
+    }
+
     @Nullable
     private InputStream openStream(ListSnapshotFilesResponse.FileInfo snapshotFile, FileType fileType)
     {
@@ -156,6 +245,11 @@ public class SidecarProvisionedSSTable extends SSTable
      * @return an CassandraFileSource implementation that uses Sidecar client to request bytes
      */
     private CassandraFileSource<SidecarProvisionedSSTable> source(ListSnapshotFilesResponse.FileInfo fileInfo, FileType fileType)
+    {
+        return source(fileInfo, fileType, fileInfo.size);
+    }
+
+    private CassandraFileSource<SidecarProvisionedSSTable> source(ListSnapshotFilesResponse.FileInfo fileInfo, FileType fileType, long size)
     {
         SidecarProvisionedSSTable thisSSTable = this;
         return new CassandraFileSource<SidecarProvisionedSSTable>()
@@ -202,7 +296,7 @@ public class SidecarProvisionedSSTable extends SSTable
             @Override
             public long size()
             {
-                return fileInfo.size;
+                return size;
             }
         };
     }

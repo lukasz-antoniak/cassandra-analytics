@@ -144,6 +144,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
     @Nullable
     protected String lastModifiedTimestampField;
     protected Set<String> sstableVersionsOnCluster;
+    protected List<SaiIndex> saiIndexes = Collections.emptyList();
     // volatile in order to publish the reference for visibility
     protected volatile CqlTable cqlTable;
     protected transient TimeProvider timeProvider;
@@ -306,6 +307,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         String fullSchema = schemaFuture.get().schema();
         String createStmt = CqlUtils.extractTableSchema(fullSchema, keyspace, table);
         int indexCount = CqlUtils.extractIndexCount(fullSchema, keyspace, table);
+        saiIndexes = CqlUtils.extractSaiIndexes(fullSchema, keyspace, table);
         Set<String> udts = CqlUtils.extractUdts(fullSchema, keyspace);
         ReplicationFactor replicationFactor = CqlUtils.extractReplicationFactor(fullSchema, keyspace);
 
@@ -332,6 +334,13 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         int effectiveNumberOfCores = sizingFuture.get();
         tokenPartitioner = new TokenPartitioner(ring, options.defaultParallelism(), effectiveNumberOfCores);
         return effectiveNumberOfCores;
+    }
+
+    @NotNull
+    @Override
+    public List<SaiIndex> saiIndexes()
+    {
+        return saiIndexes;
     }
 
     /**
@@ -659,7 +668,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
                             + "instance={} port={} keyspace={} tableName={} snapshotName={} cacheKey={}",
                             partitionId, range.lowerEndpoint(), range.upperEndpoint(),
                             sidecarInstance.hostname(), sidecarInstance.port(), maybeQuotedKeyspace, maybeQuotedTable, snapshotName, key);
-                return sidecar.listSnapshotFiles(sidecarInstance, maybeQuotedKeyspace, maybeQuotedTable, snapshotName, false)
+                boolean includeSecondaryIndexFiles = !saiIndexes.isEmpty();
+                return sidecar.listSnapshotFiles(sidecarInstance, maybeQuotedKeyspace, maybeQuotedTable, snapshotName, includeSecondaryIndexFiles)
                               .thenApply(response -> collectSSTableList(sidecarInstance, response, partitionId));
             }).thenApply(Collection::stream);
         }
@@ -688,9 +698,16 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
 
         // Group SSTable components together
         Map<String, Map<FileType, ListSnapshotFilesResponse.FileInfo>> result = new LinkedHashMap<>(1024);
+        Map<String, Map<String, ListSnapshotFilesResponse.FileInfo>> customComponents = new LinkedHashMap<>(1024);
         for (ListSnapshotFilesResponse.FileInfo file : snapshotFilesInfo)
         {
             String fileName = file.fileName;
+            // Traditional secondary indexes are snapshot under index subdirectories. We request secondary-index
+            // files so Sidecar exposes SAI components, but only base-table components belong in this SSTable set.
+            if (fileName.indexOf('/') >= 0 || fileName.indexOf('\\') >= 0)
+            {
+                continue;
+            }
             int lastIndexOfDash = fileName.lastIndexOf('-');
             if (lastIndexOfDash < 0)
             {
@@ -706,19 +723,26 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             }
             catch (IllegalArgumentException ignore)
             {
-                // Ignore unknown SSTable component types
+                // SAI components are dynamically named and cannot be represented by FileType.
+                String componentName = fileName.substring(lastIndexOfDash + 1);
+                if (componentName.startsWith("SAI+"))
+                {
+                    customComponents.computeIfAbsent(ssTableName, k -> new LinkedHashMap<>())
+                                    .put(fileName, file);
+                }
             }
         }
 
         // Map to SSTable
-        List<SSTable> sstables = result.values().stream()
-                     .map(components -> new SidecarProvisionedSSTable(sidecar,
+        List<SSTable> sstables = result.entrySet().stream()
+                     .map(entry -> new SidecarProvisionedSSTable(sidecar,
                                                                       sidecarClientConfig,
                                                                       sidecarInstance,
                                                                       maybeQuotedKeyspace,
                                                                       maybeQuotedTable,
                                                                       snapshotName,
-                                                                      components,
+                                                                      entry.getValue(),
+                                                                      customComponents.getOrDefault(entry.getKey(), Collections.emptyMap()),
                                                                       partitionId,
                                                                       stats()))
                      .collect(Collectors.toList());
@@ -865,6 +889,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         this.timeProvider = new ReaderTimeProvider(in.readLong());
         this.sstableTimeRangeFilter = (SSTableTimeRangeFilter) in.readObject();
         this.sstableVersionsOnCluster = (Set<String>) in.readObject();
+        this.saiIndexes = (List<SaiIndex>) in.readObject();
         this.maybeQuoteKeyspaceAndTable();
         this.initSidecarClient();
         this.initInstanceMap();
@@ -912,6 +937,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         out.writeLong(timeProvider.referenceEpochInSeconds());
         out.writeObject(this.sstableTimeRangeFilter);
         out.writeObject(this.sstableVersionsOnCluster);
+        out.writeObject(this.saiIndexes);
     }
 
     private static void writeNullable(ObjectOutputStream out, @Nullable String string) throws IOException
@@ -1050,6 +1076,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             out.writeLong(dataLayer.timeProvider.referenceEpochInSeconds());
             kryo.writeObject(out, dataLayer.sstableTimeRangeFilter);
             kryo.writeObject(out, dataLayer.sstableVersionsOnCluster);
+            kryo.writeObject(out, new ArrayList<>(dataLayer.saiIndexes));
         }
 
         @SuppressWarnings("unchecked")
@@ -1058,7 +1085,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         {
             LOGGER.info("Deserializing CassandraDataLayer with Kryo");
 
-            return new CassandraDataLayer(
+            CassandraDataLayer dataLayer = new CassandraDataLayer(
             in.readString(),
             in.readString(),
             in.readBoolean(),
@@ -1094,6 +1121,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             new ReaderTimeProvider(in.readLong()),
             kryo.readObject(in, SSTableTimeRangeFilter.class),
             kryo.readObject(in, HashSet.class));
+            dataLayer.saiIndexes = kryo.readObject(in, ArrayList.class);
+            return dataLayer;
         }
 
         // Wrapper only used internally for Kryo serialization/deserialization
