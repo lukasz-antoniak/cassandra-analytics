@@ -25,7 +25,6 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,11 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.cassandra.cql3.Operator;
-import org.apache.cassandra.cql3.statements.schema.IndexTarget;
-import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
-import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.index.sai.QueryContext;
@@ -53,13 +48,10 @@ import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIntersectionIterator;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.iterators.KeyRangeUnionIterator;
-import org.apache.cassandra.index.sai.plan.Expression;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.Descriptor;
-import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
-import org.apache.cassandra.spark.data.SaiIndex;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
@@ -113,15 +105,13 @@ public final class SaiIndexReader
         ResourceGroup resources = new ResourceGroup();
         try
         {
-            PlanNode plan = buildPlan(metadata, filters);
+            SaiQueryPlanner.Plan plan = SaiQueryPlanner.plan(metadata, filters);
             if (plan == null)
             {
                 return Optional.empty();
             }
 
-            Map<StorageAttachedIndex, IndexPlan> resourcePlansByIndex = new LinkedHashMap<>();
-            plan.collectResourcePlans(resourcePlansByIndex);
-            List<IndexPlan> resourcePlans = new ArrayList<>(resourcePlansByIndex.values());
+            List<SaiQueryPlanner.IndexPlan> resourcePlans = plan.resourcePlans();
 
             // Open every SAI component once. The resources remain live until the final result iterator is
             // exhausted/closed; their FileHandles perform positional Sidecar reads instead of local-file reads.
@@ -148,135 +138,19 @@ public final class SaiIndexReader
         }
     }
 
-    @Nullable
-    private static PlanNode buildPlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
-    {
-        return buildAndPlan(metadata, filters);
-    }
-
-    @Nullable
-    private static PlanNode buildPlan(@NotNull TableMetadata metadata, @NotNull SaiFilter filter)
-    {
-        if (filter.kind() == SaiFilter.Kind.AND)
-        {
-            List<SaiFilter> conjuncts = new ArrayList<>();
-            collectConjuncts(filter, conjuncts);
-            return buildAndPlan(metadata, conjuncts);
-        }
-        if (filter.kind() == SaiFilter.Kind.OR)
-        {
-            PlanNode left = buildPlan(metadata, filter.left());
-            PlanNode right = buildPlan(metadata, filter.right());
-            return left == null || right == null
-                   ? null
-                   : combine(PlanNode.Kind.OR, java.util.Arrays.asList(left, right));
-        }
-        return buildPredicatePlan(metadata, Collections.singletonList(filter));
-    }
-
-    @Nullable
-    private static PlanNode buildAndPlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
-    {
-        List<SaiFilter> conjuncts = new ArrayList<>();
-        for (SaiFilter filter : filters)
-        {
-            collectConjuncts(filter, conjuncts);
-        }
-
-        Map<SaiIndex, List<SaiFilter>> groupedPredicates = new LinkedHashMap<>();
-        List<SaiFilter> complexTerms = new ArrayList<>();
-        for (SaiFilter conjunct : conjuncts)
-        {
-            if (conjunct.isPredicate())
-            {
-                groupedPredicates.computeIfAbsent(conjunct.index(), ignored -> new ArrayList<>()).add(conjunct);
-            }
-            else
-            {
-                complexTerms.add(conjunct);
-            }
-        }
-
-        List<PlanNode> children = new ArrayList<>(groupedPredicates.size() + complexTerms.size());
-        for (List<SaiFilter> predicates : groupedPredicates.values())
-        {
-            PlanNode predicate = buildPredicatePlan(metadata, predicates);
-            if (predicate == null)
-            {
-                return null;
-            }
-            children.add(predicate);
-        }
-        for (SaiFilter complexTerm : complexTerms)
-        {
-            PlanNode child = buildPlan(metadata, complexTerm);
-            if (child == null)
-            {
-                return null;
-            }
-            children.add(child);
-        }
-        return children.isEmpty() ? null : combine(PlanNode.Kind.AND, children);
-    }
-
-    private static void collectConjuncts(@NotNull SaiFilter filter, @NotNull List<SaiFilter> conjuncts)
-    {
-        if (filter.kind() == SaiFilter.Kind.AND)
-        {
-            collectConjuncts(filter.left(), conjuncts);
-            collectConjuncts(filter.right(), conjuncts);
-        }
-        else
-        {
-            conjuncts.add(filter);
-        }
-    }
-
-    @Nullable
-    private static PlanNode buildPredicatePlan(@NotNull TableMetadata metadata, @NotNull List<SaiFilter> filters)
-    {
-        if (filters.isEmpty())
-        {
-            return null;
-        }
-        SaiIndex saiIndex = filters.get(0).index();
-        StorageAttachedIndex index = storageAttachedIndex(metadata, saiIndex);
-        if (!canSearch(index, filters))
-        {
-            return null;
-        }
-
-        Expression expression = Expression.create(index);
-        for (SaiFilter filter : filters)
-        {
-            expression.add(operator(filter.operator()), index.termType().fromString(filter.value()));
-        }
-        return PlanNode.predicate(new IndexPlan(index, expression));
-    }
-
     @NotNull
-    private static PlanNode combine(@NotNull PlanNode.Kind kind, @NotNull List<PlanNode> children)
-    {
-        if (children.size() == 1)
-        {
-            return children.get(0);
-        }
-        return PlanNode.booleanNode(kind, children);
-    }
-
-    @NotNull
-    private static KeyRangeIterator executePlan(@NotNull PlanNode plan,
+    private static KeyRangeIterator executePlan(@NotNull SaiQueryPlanner.Plan plan,
                                                 @NotNull List<SSTableResources> sstableResources,
                                                 @NotNull QueryContext queryContext) throws IOException
     {
-        if (plan.kind == PlanNode.Kind.PREDICATE)
+        if (plan.isPredicate())
         {
             List<KeyRangeIterator> perSSTableMatches = new ArrayList<>(sstableResources.size());
             try
             {
                 for (SSTableResources resource : sstableResources)
                 {
-                    perSSTableMatches.add(resource.search(plan.predicate, queryContext));
+                    perSSTableMatches.add(resource.search(plan.predicate(), queryContext));
                 }
                 // Always UNION a predicate across SSTables before composing boolean operators. A logical row may be
                 // assembled from values written in different SSTables, so per-SSTable boolean composition can create
@@ -291,14 +165,14 @@ public final class SaiIndexReader
             }
         }
 
-        List<KeyRangeIterator> children = new ArrayList<>(plan.children.size());
+        List<KeyRangeIterator> children = new ArrayList<>(plan.children().size());
         try
         {
-            for (PlanNode child : plan.children)
+            for (SaiQueryPlanner.Plan child : plan.children())
             {
                 children.add(executePlan(child, sstableResources, queryContext));
             }
-            if (plan.kind == PlanNode.Kind.OR)
+            if (plan.isOr())
             {
                 return KeyRangeUnionIterator.build(children);
             }
@@ -335,119 +209,6 @@ public final class SaiIndexReader
         throw new IOException(message, throwable);
     }
 
-
-    private static boolean canSearch(@NotNull StorageAttachedIndex index, @NotNull List<SaiFilter> filters)
-    {
-        if (index.hasAnalyzer()
-            || index.termType().isVector()
-            || index.termType().isNonFrozenCollection()
-            || index.termType().isFrozenCollection()
-            || index.termType().isComposite())
-        {
-            return false;
-        }
-
-        for (SaiFilter filter : filters)
-        {
-            if (!index.supportsExpression(index.termType().columnMetadata(), operator(filter.operator())))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    @NotNull
-    private static StorageAttachedIndex storageAttachedIndex(@NotNull TableMetadata metadata, @NotNull SaiIndex saiIndex)
-    {
-        String cacheKey = metadata.id + ":" + saiIndex.name();
-        return INDEXES.computeIfAbsent(cacheKey, ignored -> {
-            ColumnFamilyStore cfs = Keyspace.openWithoutSSTables(metadata.keyspace).getColumnFamilyStore(metadata.name);
-            Map<String, String> options = new HashMap<>(saiIndex.options());
-            options.put(IndexTarget.TARGET_OPTION_NAME, saiIndex.target());
-            options.put(IndexTarget.CUSTOM_INDEX_OPTION_NAME, StorageAttachedIndex.class.getName());
-            IndexMetadata indexMetadata = IndexMetadata.fromSchemaMetadata(saiIndex.name(), IndexMetadata.Kind.CUSTOM, options);
-            return new StorageAttachedIndex(cfs, indexMetadata);
-        });
-    }
-
-    @NotNull
-    private static Operator operator(@NotNull SaiFilter.Operator operator)
-    {
-        switch (operator)
-        {
-            case EQ:
-                return Operator.EQ;
-            case LT:
-                return Operator.LT;
-            case LTE:
-                return Operator.LTE;
-            case GT:
-                return Operator.GT;
-            case GTE:
-                return Operator.GTE;
-            default:
-                throw new IllegalArgumentException("Unsupported SAI operator: " + operator);
-        }
-    }
-
-    private static final class PlanNode
-    {
-        private enum Kind
-        {
-            PREDICATE,
-            AND,
-            OR
-        }
-
-        private final Kind kind;
-        @Nullable
-        private final IndexPlan predicate;
-        private final List<PlanNode> children;
-
-        private PlanNode(Kind kind, @Nullable IndexPlan predicate, List<PlanNode> children)
-        {
-            this.kind = kind;
-            this.predicate = predicate;
-            this.children = children;
-        }
-
-        private static PlanNode predicate(IndexPlan predicate)
-        {
-            return new PlanNode(Kind.PREDICATE, predicate, Collections.emptyList());
-        }
-
-        private static PlanNode booleanNode(Kind kind, List<PlanNode> children)
-        {
-            return new PlanNode(kind, null, children);
-        }
-
-        private void collectResourcePlans(Map<StorageAttachedIndex, IndexPlan> plans)
-        {
-            if (kind == Kind.PREDICATE)
-            {
-                plans.putIfAbsent(predicate.index, predicate);
-                return;
-            }
-            for (PlanNode child : children)
-            {
-                child.collectResourcePlans(plans);
-            }
-        }
-    }
-
-    private static final class IndexPlan
-    {
-        private final StorageAttachedIndex index;
-        private final Expression expression;
-
-        private IndexPlan(StorageAttachedIndex index, Expression expression)
-        {
-            this.index = index;
-            this.expression = expression;
-        }
-    }
-
     /** Holds all open native SAI resources for one SSTable. */
     private static final class SSTableResources implements Closeable
     {
@@ -467,9 +228,9 @@ public final class SaiIndexReader
         }
 
         @NotNull
-        static SSTableResources open(@NotNull TableMetadata metadata,
+        static synchronized SSTableResources open(@NotNull TableMetadata metadata,
                                      @NotNull SSTable sstable,
-                                     @NotNull List<IndexPlan> plans) throws IOException
+                                     @NotNull List<SaiQueryPlanner.IndexPlan> plans) throws IOException
         {
             if (sstable.customComponentNames().isEmpty())
             {
@@ -490,11 +251,11 @@ public final class SaiIndexReader
                 {
                     throw new IOException("Incomplete per-SSTable SAI components: " + sstable.getDataFileName());
                 }
-                for (IndexPlan plan : plans)
+                for (SaiQueryPlanner.IndexPlan plan : plans)
                 {
-                    if (!indexDescriptor.isPerColumnIndexBuildComplete(plan.index.identifier()))
+                    if (!indexDescriptor.isPerColumnIndexBuildComplete(plan.index().identifier()))
                     {
-                        throw new IOException("Incomplete SAI components for " + plan.index.identifier()
+                        throw new IOException("Incomplete SAI components for " + plan.index().identifier()
                                               + " in " + sstable.getDataFileName());
                     }
                 }
@@ -502,7 +263,7 @@ public final class SaiIndexReader
                 resources = new SSTableResources(descriptor,
                                                  indexDescriptor,
                                                  indexDescriptor.newPrimaryKeyMapFactory(null));
-                for (IndexPlan plan : plans)
+                for (SaiQueryPlanner.IndexPlan plan : plans)
                 {
                     resources.openColumn(plan);
                 }
@@ -522,21 +283,22 @@ public final class SaiIndexReader
             }
         }
 
-        private void openColumn(IndexPlan plan) throws IOException
+        private void openColumn(SaiQueryPlanner.IndexPlan plan) throws IOException
         {
-            if (indexDescriptor.isIndexEmpty(plan.index.termType(), plan.index.identifier()))
+            StorageAttachedIndex index = plan.index();
+            if (indexDescriptor.isIndexEmpty(index.termType(), index.identifier()))
             {
-                columns.put(plan.index, OpenColumnIndex.empty());
+                columns.put(index, OpenColumnIndex.empty());
                 return;
             }
 
             PerColumnIndexFiles indexFiles = new PerColumnIndexFiles(indexDescriptor,
-                                                                     plan.index.termType(),
-                                                                     plan.index.identifier());
+                                                                     index.termType(),
+                                                                     index.identifier());
             OpenColumnIndex column = new OpenColumnIndex(indexFiles);
             try
             {
-                MetadataSource metadataSource = MetadataSource.loadColumnMetadata(indexDescriptor, plan.index.identifier());
+                MetadataSource metadataSource = MetadataSource.loadColumnMetadata(indexDescriptor, index.identifier());
                 List<SegmentMetadata> segments = SegmentMetadata.load(metadataSource, indexDescriptor.primaryKeyFactory);
                 for (SegmentMetadata segment : segments)
                 {
@@ -545,9 +307,9 @@ public final class SaiIndexReader
                                                                                   descriptor.id,
                                                                                   indexFiles,
                                                                                   segment,
-                                                                                  plan.index)));
+                                                                                  index)));
                 }
-                columns.put(plan.index, column);
+                columns.put(index, column);
             }
             catch (Throwable throwable)
             {
@@ -556,14 +318,14 @@ public final class SaiIndexReader
                 {
                     throw (IOException) throwable;
                 }
-                throw new IOException("Unable to open SAI column " + plan.index.identifier(), throwable);
+                throw new IOException("Unable to open SAI column " + index.identifier(), throwable);
             }
         }
 
         @NotNull
-        KeyRangeIterator search(@NotNull IndexPlan plan, @NotNull QueryContext queryContext) throws IOException
+        KeyRangeIterator search(@NotNull SaiQueryPlanner.IndexPlan plan, @NotNull QueryContext queryContext) throws IOException
         {
-            OpenColumnIndex column = columns.get(plan.index);
+            OpenColumnIndex column = columns.get(plan.index());
             if (column == null || column.segments.isEmpty())
             {
                 return KeyRangeIterator.empty();
@@ -576,7 +338,7 @@ public final class SaiIndexReader
                 {
                     Bounds<PartitionPosition> keyRange = new Bounds<>(segment.metadata.minKey.partitionKey(),
                                                                       segment.metadata.maxKey.partitionKey());
-                    segmentMatches.add(segment.searcher.search(plan.expression, keyRange, queryContext));
+                    segmentMatches.add(segment.searcher.search(plan.expression(), keyRange, queryContext));
                 }
                 return KeyRangeUnionIterator.build(segmentMatches);
             }
@@ -587,7 +349,7 @@ public final class SaiIndexReader
                 {
                     throw (IOException) throwable;
                 }
-                throw new IOException("Unable to search SAI column " + plan.index.identifier(), throwable);
+                throw new IOException("Unable to search SAI column " + plan.index().identifier(), throwable);
             }
         }
 
