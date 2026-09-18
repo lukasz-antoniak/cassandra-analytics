@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -120,18 +121,7 @@ public final class SaiIndexReader
             try (KeyRangeIterator finalMatches = executePlan(plan, sstableResources, queryContext))
             {
                 finalMatches.setOnClose(resources::close);
-                CandidateTokenRanges.Builder candidates = CandidateTokenRanges.builder();
-                while (finalMatches.hasNext())
-                {
-                    PrimaryKey primaryKey = finalMatches.next();
-                    DecoratedKey partitionKey = primaryKey.partitionKey();
-                    BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
-                    if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
-                    {
-                        candidates.add(token);
-                    }
-                }
-                return Optional.of(candidates.build());
+                return Optional.of(collectCandidateTokenRanges(finalMatches, sparkRangeFilter));
             }
         }
         catch (Throwable throwable)
@@ -141,6 +131,31 @@ public final class SaiIndexReader
             LOGGER.warn("Unable to use SAI for SSTable pruning; falling back to normal SSTable scan", throwable);
             return Optional.empty();
         }
+    }
+
+    /**
+     * Fully consumes the sorted native SAI result stream and converts it to the compact token-range
+     * representation used by the Data.db read-planning phase.
+     *
+     * <p>This method deliberately accepts an {@link Iterator} rather than a {@link KeyRangeIterator};
+     * resource ownership remains with {@link #findCandidateTokenRanges(TableMetadata, Set, List, SparkRangeFilter)}.
+     * Keeping the conversion separate also makes the one-pass materialization semantics directly testable.</p>
+     */
+    @NotNull
+    static CandidateTokenRanges collectCandidateTokenRanges(@NotNull Iterator<PrimaryKey> matches,
+                                                            @Nullable SparkRangeFilter sparkRangeFilter)
+    {
+        CandidateTokenRanges.Builder candidates = CandidateTokenRanges.builder();
+        while (matches.hasNext())
+        {
+            DecoratedKey partitionKey = matches.next().partitionKey();
+            BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
+            if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
+            {
+                candidates.add(token);
+            }
+        }
+        return candidates.build();
     }
 
     @NotNull
