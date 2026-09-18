@@ -233,7 +233,7 @@ public final class SaiIndexReader
         }
 
         @NotNull
-        static synchronized SSTableResources open(@NotNull TableMetadata metadata,
+        static SSTableResources open(@NotNull TableMetadata metadata,
                                      @NotNull SSTable sstable,
                                      @NotNull List<SaiQueryPlanner.IndexPlan> plans) throws IOException
         {

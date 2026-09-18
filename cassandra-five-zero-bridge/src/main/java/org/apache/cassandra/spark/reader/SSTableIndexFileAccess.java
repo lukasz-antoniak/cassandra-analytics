@@ -44,7 +44,7 @@ final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
 {
     // Avoid Cassandra's 4 KiB default, which would turn random SAI traversal into
     // one Sidecar request per 4 KiB. This is deliberately a small/tunable first cut.
-    private static final int REMOTE_READ_BUFFER_SIZE = 64 * 1024;
+    private static final int REMOTE_READ_BUFFER_SIZE = 512 * 1024;
 
     private final SSTable sstable;
     private final Set<String> components;
@@ -154,7 +154,7 @@ final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
                 return -1;
             }
 
-            int requested = (int) Math.min((long) destination.remaining(), length - absolutePosition);
+            int requested = (int) Math.min(destination.remaining(), length - absolutePosition);
             int originalLimit = destination.limit();
             destination.limit(destination.position() + requested);
             try

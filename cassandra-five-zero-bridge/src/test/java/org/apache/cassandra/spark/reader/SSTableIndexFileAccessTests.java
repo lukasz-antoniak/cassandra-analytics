@@ -132,7 +132,7 @@ class SSTableIndexFileAccessTests
             ByteBuffer ignored = ByteBuffer.allocate(2);
             ByteBuffer first = ByteBuffer.allocate(3);
             ByteBuffer second = ByteBuffer.allocate(4);
-            ByteBuffer[] destinations = { ignored, first, second };
+            ByteBuffer[] destinations = {ignored, first, second};
 
             assertThat(channel.read(destinations, 1, 2)).isEqualTo(7);
             assertThat(channel.position()).isEqualTo(12);
@@ -152,7 +152,7 @@ class SSTableIndexFileAccessTests
             assertThat(channel.size()).isEqualTo(16);
             assertThatThrownBy(() -> channel.position(-1)).isInstanceOf(IllegalArgumentException.class);
 
-            ByteBuffer[] destinations = { ByteBuffer.allocate(1), ByteBuffer.allocate(1) };
+            ByteBuffer[] destinations = {ByteBuffer.allocate(1), ByteBuffer.allocate(1)};
             assertThatThrownBy(() -> channel.read(destinations, -1, 1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> channel.read(destinations, 0, 3)).isInstanceOf(IndexOutOfBoundsException.class);
         }
