@@ -94,13 +94,12 @@ import org.apache.cassandra.spark.data.TypeConverter;
 import org.apache.cassandra.spark.data.complex.CqlTuple;
 import org.apache.cassandra.spark.data.complex.CqlUdt;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
-import org.apache.cassandra.spark.reader.BatchedCompactionStreamScanner;
 import org.apache.cassandra.spark.reader.BtiIndexReader;
+import org.apache.cassandra.spark.reader.CandidateTokenRanges;
 import org.apache.cassandra.spark.reader.CompactionStreamScanner;
 import org.apache.cassandra.spark.reader.EmptyStreamScanner;
 import org.apache.cassandra.spark.reader.IndexEntry;
 import org.apache.cassandra.spark.reader.BigIndexReader;
-import org.apache.cassandra.spark.reader.PartitionKeyBatchIterator;
 import org.apache.cassandra.spark.reader.ReaderUtils;
 import org.apache.cassandra.spark.reader.RowData;
 import org.apache.cassandra.spark.reader.SaiIndexReader;
@@ -134,7 +133,6 @@ import org.jetbrains.annotations.Nullable;
 @SuppressWarnings("unused")
 public class CassandraBridgeImplementation extends CassandraBridge
 {
-    private static final int SAI_PARTITION_KEY_BATCH_SIZE = 1024;
     private static final Logger LOGGER = LoggerFactory.getLogger(CassandraBridgeImplementation.class);
 
     private final Map<Class<?>, Serializer<?>> kryoSerializers;
@@ -260,9 +258,8 @@ public class CassandraBridgeImplementation extends CassandraBridge
         SchemaBuilder schemaBuilder = new SchemaBuilder(table, partitioner);
         TableMetadata metadata = schemaBuilder.tableMetaData();
 
-        // Freeze the selected replica/SSTable set once. The SAI iterator remains open while candidate partitions
-        // are consumed in bounded batches. Every batch is still read from every selected Data.db so normal
-        // Cassandra reconciliation applies newer values, TTLs and tombstones.
+        // Freeze the selected replica/SSTable set once. SAI is fully consumed before opening Data.db readers so
+        // the selected SSTables are reconciled exactly once.
         Set<SaiSSTableReference> references = ssTables.openAll(SaiSSTableReference::new);
         if (references.isEmpty())
         {
@@ -270,31 +267,28 @@ public class CassandraBridgeImplementation extends CassandraBridge
         }
 
         Set<SSTable> sstables = references.stream().map(reference -> reference.sstable).collect(Collectors.toSet());
-        Optional<PartitionKeyBatchIterator> candidates = SaiIndexReader.openCandidatePartitionIterator(metadata,
-                                                                                                       sstables,
-                                                                                                       saiFilters,
-                                                                                                       sparkRangeFilter,
-                                                                                                       SAI_PARTITION_KEY_BATCH_SIZE);
+        Optional<CandidateTokenRanges> candidates = SaiIndexReader.findCandidateTokenRanges(metadata,
+                                                                                            sstables,
+                                                                                            saiFilters,
+                                                                                            sparkRangeFilter);
         if (candidates.isEmpty())
         {
-            // SAI is an optimization. If opening the index fails before any rows are emitted, preserve the
-            // existing behavior and scan the selected SSTables normally.
+            // SAI is an optimization. Since no Data.db rows have been emitted, preserve the existing behavior and
+            // safely fall back to one normal scan.
             return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
-                                         Collections.emptyList(), sstableTimeRangeFilter, columnFilter,
+                                         Collections.emptyList(), null, sstableTimeRangeFilter, columnFilter,
                                          readIndexOffset, useIncrementalRepair, stats);
         }
 
-        return new BatchedCompactionStreamScanner(candidates.get(), batch -> openCompactionScanner(metadata,
-                                                                                                   partitioner,
-                                                                                                   timeProvider,
-                                                                                                   references,
-                                                                                                   sparkRangeFilter,
-                                                                                                   batch,
-                                                                                                   sstableTimeRangeFilter,
-                                                                                                   columnFilter,
-                                                                                                   readIndexOffset,
-                                                                                                   useIncrementalRepair,
-                                                                                                   stats));
+        CandidateTokenRanges candidateTokenRanges = candidates.get();
+        if (candidateTokenRanges.isEmpty())
+        {
+            return EmptyStreamScanner.INSTANCE;
+        }
+
+        return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
+                                     Collections.emptyList(), candidateTokenRanges, sstableTimeRangeFilter,
+                                     columnFilter, readIndexOffset, useIncrementalRepair, stats);
     }
 
     @NotNull
@@ -304,6 +298,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                 @NotNull Set<SaiSSTableReference> references,
                                                                 @Nullable SparkRangeFilter sparkRangeFilter,
                                                                 @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
+                                                                @Nullable CandidateTokenRanges candidateTokenRanges,
                                                                 @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
                                                                 @Nullable PruneColumnFilter columnFilter,
                                                                 boolean readIndexOffset,
@@ -317,6 +312,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                         return org.apache.cassandra.spark.reader.SSTableReader.builder(metadata, reference.sstable)
                                                                               .withSparkRangeFilter(sparkRangeFilter)
                                                                               .withPartitionKeyFilters(partitionKeyFilters)
+                                                                              .withCandidateTokenRanges(candidateTokenRanges)
                                                                               .withTimeRangeFilter(sstableTimeRangeFilter)
                                                                               .withColumnFilter(columnFilter)
                                                                               .withReadIndexOffset(readIndexOffset)

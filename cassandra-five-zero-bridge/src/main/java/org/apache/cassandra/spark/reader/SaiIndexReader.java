@@ -23,13 +23,11 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +50,6 @@ import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.Descriptor;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
-import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
 import org.apache.cassandra.utils.TokenUtils;
@@ -60,23 +57,22 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Opens Cassandra 5 SAI components once for the lifetime of a Spark read partition and streams matching
- * primary keys from Cassandra's native SAI iterators.
+ * Opens Cassandra 5 SAI components, executes the query plan once, and materializes the resulting candidate tokens
+ * as compact ranges.
  *
  * <p>For every indexed predicate, matches are first UNIONed across all SSTables. The resulting global predicate
  * streams are then composed using Cassandra's native SAI iterators: AND becomes intersection and OR becomes union.
  * This ordering is important for correctness: values contributing to a logically reconciled row may live in
  * different SSTables. Applying boolean composition inside each SSTable could therefore create false negatives.</p>
  *
- * <p>SAI is used only to identify candidate partitions. Each emitted partition batch must still be read from all
- * participating Data.db SSTables and passed through the normal Cassandra compaction/reconciliation path. Spark keeps
- * the original predicates as residual filters, so stale index entries caused by updates, TTLs, or tombstones can
- * only create false positives, never incorrect returned rows.</p>
+ * <p>SAI is a read-planning phase only. The native iterator is fully consumed before Data.db scanning starts, then
+ * all SAI resources are closed. The resulting token ranges are passed to every participating SSTable so the normal
+ * Cassandra compaction/reconciliation path can still apply newer values, TTLs and tombstones. Spark keeps the
+ * original predicates as residual filters, so stale index entries can only create false positives.</p>
  */
 public final class SaiIndexReader
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(SaiIndexReader.class);
-    private static final Map<String, StorageAttachedIndex> INDEXES = new ConcurrentHashMap<>();
     private static final long NO_TIMEOUT_MILLIS = Long.MAX_VALUE;
 
     private SaiIndexReader()
@@ -85,21 +81,20 @@ public final class SaiIndexReader
     }
 
     /**
-     * Opens all SAI resources required by the supplied predicates and returns a lazy, closeable batch iterator.
+     * Executes all SAI predicates once and returns the sorted candidate tokens as compact ranges.
      *
-     * @return empty when SAI cannot safely be used and the caller should fall back to the ordinary SSTable scan
+     * @return empty Optional when SAI cannot safely be used and the caller should fall back to the ordinary SSTable
+     *         scan; an empty {@link CandidateTokenRanges} means SAI executed successfully and found no candidates
      */
     @NotNull
-    public static Optional<PartitionKeyBatchIterator> openCandidatePartitionIterator(@NotNull TableMetadata metadata,
-                                                                                     @NotNull Set<SSTable> sstables,
-                                                                                     @NotNull List<SaiFilter> filters,
-                                                                                     @Nullable SparkRangeFilter sparkRangeFilter,
-                                                                                     int batchSize)
+    public static Optional<CandidateTokenRanges> findCandidateTokenRanges(@NotNull TableMetadata metadata,
+                                                                          @NotNull Set<SSTable> sstables,
+                                                                          @NotNull List<SaiFilter> filters,
+                                                                          @Nullable SparkRangeFilter sparkRangeFilter)
     {
-        assert batchSize > 0;
         if (sstables.isEmpty() || filters.isEmpty())
         {
-            return Optional.of(new EmptyPartitionKeyBatchIterator());
+            return Optional.of(CandidateTokenRanges.empty());
         }
 
         ResourceGroup resources = new ResourceGroup();
@@ -113,8 +108,6 @@ public final class SaiIndexReader
 
             List<SaiQueryPlanner.IndexPlan> resourcePlans = plan.resourcePlans();
 
-            // Open every SAI component once. The resources remain live until the final result iterator is
-            // exhausted/closed; their FileHandles perform positional Sidecar reads instead of local-file reads.
             List<SSTableResources> sstableResources = new ArrayList<>(sstables.size());
             for (SSTable sstable : sstables)
             {
@@ -124,15 +117,27 @@ public final class SaiIndexReader
             }
 
             QueryContext queryContext = new QueryContext(null, NO_TIMEOUT_MILLIS);
-            KeyRangeIterator finalMatches = executePlan(plan, sstableResources, queryContext);
-            finalMatches.setOnClose(resources::close);
-            return Optional.of(new CandidatePartitionIterator(finalMatches, resources, sparkRangeFilter, batchSize));
+            try (KeyRangeIterator finalMatches = executePlan(plan, sstableResources, queryContext))
+            {
+                finalMatches.setOnClose(resources::close);
+                CandidateTokenRanges.Builder candidates = CandidateTokenRanges.builder();
+                while (finalMatches.hasNext())
+                {
+                    PrimaryKey primaryKey = finalMatches.next();
+                    DecoratedKey partitionKey = primaryKey.partitionKey();
+                    BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
+                    if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
+                    {
+                        candidates.add(token);
+                    }
+                }
+                return Optional.of(candidates.build());
+            }
         }
         catch (Throwable throwable)
         {
             resources.close();
-            // SAI is an optimization. Missing/corrupt/unsupported index state detected before rows are emitted
-            // fails open to the existing full SSTable scan.
+            // No Data.db rows have been emitted yet, so every SAI failure can safely fail open to a normal scan.
             LOGGER.warn("Unable to use SAI for SSTable pruning; falling back to normal SSTable scan", throwable);
             return Optional.empty();
         }
@@ -440,100 +445,6 @@ public final class SaiIndexReader
                 closeQuietly(resource);
             }
             resources.clear();
-        }
-    }
-
-    /** Converts the native SAI row iterator to unique partition-key batches without materializing all matches. */
-    private static final class CandidatePartitionIterator implements PartitionKeyBatchIterator
-    {
-        private final KeyRangeIterator matches;
-        private final ResourceGroup resources;
-        @Nullable
-        private final SparkRangeFilter sparkRangeFilter;
-        private final int batchSize;
-        @Nullable
-        private DecoratedKey lastPartitionKey;
-        private boolean closed;
-
-        private CandidatePartitionIterator(KeyRangeIterator matches,
-                                           ResourceGroup resources,
-                                           @Nullable SparkRangeFilter sparkRangeFilter,
-                                           int batchSize)
-        {
-            this.matches = matches;
-            this.resources = resources;
-            this.sparkRangeFilter = sparkRangeFilter;
-            this.batchSize = batchSize;
-        }
-
-        @Override
-        @NotNull
-        public List<PartitionKeyFilter> nextBatch() throws IOException
-        {
-            if (closed)
-            {
-                return Collections.emptyList();
-            }
-
-            List<PartitionKeyFilter> batch = new ArrayList<>(batchSize);
-            try
-            {
-                while (batch.size() < batchSize && matches.hasNext())
-                {
-                    PrimaryKey primaryKey = matches.next();
-                    DecoratedKey partitionKey = primaryKey.partitionKey();
-                    if (lastPartitionKey != null && lastPartitionKey.equals(partitionKey))
-                    {
-                        continue;
-                    }
-                    lastPartitionKey = partitionKey;
-
-                    BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
-                    if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
-                    {
-                        batch.add(PartitionKeyFilter.create(partitionKey.getKey().duplicate(), token));
-                    }
-                }
-
-                // If the native SAI iterator is exhausted, release all index/search resources immediately.
-                // The returned Data.db batch is independent of those resources.
-                if (!matches.hasNext())
-                {
-                    close();
-                }
-                return batch;
-            }
-            catch (RuntimeException exception)
-            {
-                close();
-                throw exception;
-            }
-        }
-
-        @Override
-        public void close()
-        {
-            if (closed)
-            {
-                return;
-            }
-            closed = true;
-            closeQuietly(matches);
-            resources.close();
-        }
-    }
-
-    private static final class EmptyPartitionKeyBatchIterator implements PartitionKeyBatchIterator
-    {
-        @Override
-        public List<PartitionKeyFilter> nextBatch()
-        {
-            return Collections.emptyList();
-        }
-
-        @Override
-        public void close()
-        {
         }
     }
 

@@ -106,6 +106,7 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
 
     static Stream<Arguments> queryInputs()
     {
+        // TODO(lantoniak): Review percentages again.
         return Stream.of(
         Arguments.of("eq", "score = " + MATCHING_SCORE, 2, 0.33),
         Arguments.of("gt", "score > 250", 8, 0.7),
