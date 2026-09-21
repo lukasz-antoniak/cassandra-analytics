@@ -394,48 +394,41 @@ public abstract class DataLayer implements Serializable
         List<SaiFilter> result = new ArrayList<>();
         for (Filter filter : filters)
         {
-            SaiFilter saiFilter = toSaiFilter(filter);
-            if (saiFilter != null)
-            {
-                result.add(saiFilter);
-            }
+            addSaiFilters(filter, result);
         }
         return result;
     }
 
     /**
-     * Converts a Spark filter subtree to a safe SAI pruning expression.
+     * Adds SAI-capable predicates from a conjunctive Spark filter tree.
      *
      * A partially-indexable AND can still use its indexable branch because every final match must satisfy that
-     * branch. A partially-indexable OR cannot be used for pruning because rows matching only the unsupported branch
-     * would otherwise be dropped.
+     * branch. OR is not supported by Cassandra 5.0 SAI, so an OR subtree is never used for SAI pruning.
      */
-    @Nullable
-    private SaiFilter toSaiFilter(@NotNull Filter filter)
+    private void addSaiFilters(@NotNull Filter filter, @NotNull List<SaiFilter> result)
     {
         if (filter instanceof And)
         {
             And and = (And) filter;
-            SaiFilter left = toSaiFilter(and.left());
-            SaiFilter right = toSaiFilter(and.right());
-            if (left == null)
-            {
-                return right;
-            }
-            if (right == null)
-            {
-                return left;
-            }
-            return SaiFilter.and(left, right);
+            addSaiFilters(and.left(), result);
+            addSaiFilters(and.right(), result);
+            return;
         }
         if (filter instanceof Or)
         {
-            Or or = (Or) filter;
-            SaiFilter left = toSaiFilter(or.left());
-            SaiFilter right = toSaiFilter(or.right());
-            return left == null || right == null ? null : SaiFilter.or(left, right);
+            return;
         }
 
+        SaiFilter saiFilter = toSaiFilter(filter);
+        if (saiFilter != null)
+        {
+            result.add(saiFilter);
+        }
+    }
+
+    @Nullable
+    private SaiFilter toSaiFilter(@NotNull Filter filter)
+    {
         String attribute = filterAttribute(filter);
         Object value = filterValue(filter);
         SaiFilter.Operator operator = saiOperator(filter);

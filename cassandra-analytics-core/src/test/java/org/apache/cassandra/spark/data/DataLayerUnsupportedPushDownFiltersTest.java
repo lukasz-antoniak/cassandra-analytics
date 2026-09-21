@@ -218,25 +218,20 @@ public class DataLayerUnsupportedPushDownFiltersTest
             assertThat(dataLayer.unsupportedPushDownFilters(allFilters)).containsExactly(allFilters);
 
             List<SaiFilter> nested = dataLayer.saiFilters(new Filter[]{new And(equality, otherColumn)});
-            assertThat(nested).hasSize(1);
-            assertThat(nested.get(0).kind()).isEqualTo(SaiFilter.Kind.AND);
-            assertThat(nested.get(0).left().index().name()).isEqualTo("c_idx");
-            assertThat(nested.get(0).right().index().name()).isEqualTo("d_idx");
+            assertThat(nested).hasSize(2);
+            assertThat(nested.get(0).index().name()).isEqualTo("c_idx");
+            assertThat(nested.get(1).index().name()).isEqualTo("d_idx");
 
-            List<SaiFilter> or = dataLayer.saiFilters(new Filter[]{new Or(equality, otherColumn)});
-            assertThat(or).hasSize(1);
-            assertThat(or.get(0).kind()).isEqualTo(SaiFilter.Kind.OR);
-            assertThat(or.get(0).left().index().name()).isEqualTo("c_idx");
-            assertThat(or.get(0).right().index().name()).isEqualTo("d_idx");
+            // Cassandra 5.0 SAI does not support OR, so even a fully indexed OR is not used for pruning.
+            assertThat(dataLayer.saiFilters(new Filter[]{new Or(equality, otherColumn)})).isEmpty();
 
+            // An unsupported OR subtree does not prevent an independent AND conjunct from being used safely.
             List<SaiFilter> nestedBoolean = dataLayer.saiFilters(new Filter[]{new And(new Or(equality, otherColumn),
                                                                                       lowerBound)});
-            assertThat(nestedBoolean).hasSize(1);
-            assertThat(nestedBoolean.get(0).kind()).isEqualTo(SaiFilter.Kind.AND);
-            assertThat(nestedBoolean.get(0).left().kind()).isEqualTo(SaiFilter.Kind.OR);
-            assertThat(nestedBoolean.get(0).right().operator()).isEqualTo(SaiFilter.Operator.GT);
+            assertThat(nestedBoolean).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
+                                                                    SaiFilter.Operator.GT,
+                                                                    "10"));
 
-            // An OR is only safe for pruning when every branch is SAI-capable.
             List<SaiFilter> partialOr = dataLayer.saiFilters(new Filter[]{new Or(equality,
                                                                                 new StringContains("not_indexed", "x"))});
             assertThat(partialOr).isEmpty();

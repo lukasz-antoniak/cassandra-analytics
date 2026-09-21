@@ -73,11 +73,11 @@ import org.jetbrains.annotations.Nullable;
  * Opens Cassandra 5 SAI components, executes the query plan once, and materializes the resulting candidate tokens
  * as compact ranges.
  *
- * <p>Cassandra's native SAI planner analyzes every conjunctive query, including same-column range folding and
- * intersection. For every planned expression, matches are first UNIONed across all SSTables. Spark OR filters are
- * normalized to disjunctive normal form and only the final conjunction streams are UNIONed outside Cassandra. This
- * ordering is important for correctness: values contributing to a logically reconciled row may live in different
- * SSTables. Applying boolean composition inside each SSTable could therefore create false negatives.</p>
+ * <p>Cassandra's native SAI planner analyzes the conjunctive query, including same-column range folding and
+ * intersection. For every planned expression, matches are first UNIONed across all SSTables before Cassandra
+ * intersects different expressions. This ordering is important for correctness: values contributing to a logically
+ * reconciled row may live in different SSTables. Applying conjunctions inside each SSTable could therefore create
+ * false negatives.</p>
  *
  * <p>SAI is a read-planning phase only. The native iterator is fully consumed before Data.db scanning starts, then
  * all SAI resources are closed. The resulting token ranges are passed to every participating SSTable so the normal
@@ -100,7 +100,6 @@ public final class SaiIndexReader
      *         scan; an empty {@link CandidateTokenRanges} means SAI executed successfully and found no candidates
      */
     @NotNull
-    // TODO(lantoniak): Inspect return values.
     public static Optional<CandidateTokenRanges> findCandidateTokenRanges(@NotNull TableMetadata metadata,
                                                                           @NotNull Set<SSTable> sstables,
                                                                           @NotNull List<SaiFilter> filters,
@@ -141,7 +140,7 @@ public final class SaiIndexReader
         {
             resources.close();
             // No Data.db rows have been emitted yet, so every SAI failure can safely fail open to a normal scan.
-            LOGGER.warn("Unable to use SAI for SSTable pruning; falling back to normal SSTable scan", throwable);
+            LOGGER.warn("Unable to use SAI for SSTable pruning, falling back to normal SSTable scan", throwable);
             return Optional.empty();
         }
     }
@@ -177,28 +176,9 @@ public final class SaiIndexReader
                                                 @NotNull List<SSTableResources> sstableResources,
                                                 @NotNull QueryContext queryContext)
     {
-        List<KeyRangeIterator> disjuncts = new ArrayList<>(plan.conjunctions().size());
-        try
-        {
-            for (SaiQueryPlanner.Conjunction conjunction : plan.conjunctions())
-            {
-                QueryController controller = new AnalyticsQueryController(metadata,
-                                                                          conjunction,
-                                                                          sstableResources,
-                                                                          queryContext);
-                // Cassandra's Operation planner owns expression analysis, same-column range folding, and the
-                // intersection of the resulting global expression streams.
-                disjuncts.add(SaiPlanAccessor.buildIterator(controller));
-            }
-            // Cassandra 5.0's Operation planner only models conjunctions. Spark OR is represented as DNF by
-            // SaiQueryPlanner, so the only composition left outside Cassandra is the union of those conjunctions.
-            return disjuncts.size() == 1 ? disjuncts.get(0) : KeyRangeUnionIterator.build(disjuncts);
-        }
-        catch (Exception exception)
-        {
-            closeAll(disjuncts);
-            throw new RuntimeException("Unable to execute native Cassandra SAI query plan", exception);
-        }
+        QueryController controller = new AnalyticsQueryController(metadata, plan, sstableResources, queryContext);
+        // Cassandra's Operation planner owns expression analysis, same-column range folding, and intersection.
+        return SaiPlanAccessor.buildIterator(controller);
     }
 
     /**
@@ -210,20 +190,20 @@ public final class SaiIndexReader
      */
     private static final class AnalyticsQueryController extends QueryController
     {
-        private final SaiQueryPlanner.Conjunction conjunction;
+        private final SaiQueryPlanner.Plan plan;
         private final List<SSTableResources> sstableResources;
         private final QueryContext queryContext;
 
         private AnalyticsQueryController(@NotNull TableMetadata metadata,
-                                         @NotNull SaiQueryPlanner.Conjunction conjunction,
+                                         @NotNull SaiQueryPlanner.Plan plan,
                                          @NotNull List<SSTableResources> sstableResources,
                                          @NotNull QueryContext queryContext)
         {
             super(columnFamilyStore(metadata),
                   PartitionRangeReadCommand.allDataRead(metadata, 0L),
-                  conjunction.rowFilter(),
+                  plan.rowFilter(),
                   queryContext);
-            this.conjunction = conjunction;
+            this.plan = plan;
             this.sstableResources = sstableResources;
             this.queryContext = queryContext;
         }
@@ -232,7 +212,7 @@ public final class SaiIndexReader
         @Override
         public StorageAttachedIndex indexFor(RowFilter.Expression expression)
         {
-            return conjunction.indexFor(expression.column());
+            return plan.indexFor(expression.column());
         }
 
         @Override
@@ -351,17 +331,13 @@ public final class SaiIndexReader
                 }
                 return resources;
             }
-            catch (Throwable throwable)
+            catch (Exception exception)
             {
                 if (resources != null)
                 {
                     resources.close();
                 }
-                if (throwable instanceof IOException)
-                {
-                    throw (IOException) throwable;
-                }
-                throw new IOException("Unable to open SAI components for " + sstable.getDataFileName(), throwable);
+                throw new IOException("Unable to open SAI components for " + sstable.getDataFileName(), exception);
             }
         }
 
@@ -436,10 +412,7 @@ public final class SaiIndexReader
                 return;
             }
             closed = true;
-            for (OpenColumnIndex column : columns.values())
-            {
-                closeQuietly(column);
-            }
+            closeAll(columns.values());
             columns.clear();
             closeQuietly(primaryKeyMapFactory);
         }
@@ -510,15 +483,12 @@ public final class SaiIndexReader
                 return;
             }
             closed = true;
-            for (SSTableResources resource : resources)
-            {
-                closeQuietly(resource);
-            }
+            closeAll(resources);
             resources.clear();
         }
     }
 
-    private static void closeAll(List<? extends Closeable> closeables)
+    private static void closeAll(Collection<? extends Closeable> closeables)
     {
         for (Closeable closeable : closeables)
         {

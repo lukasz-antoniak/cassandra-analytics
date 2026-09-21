@@ -24,10 +24,9 @@ import java.util.Objects;
 
 import org.apache.cassandra.spark.data.SaiIndex;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
- * Version-neutral SAI predicate tree used as an SSTable pruning hint.
+ * Version-neutral SAI predicate used as an SSTable pruning hint.
  *
  * The Spark predicate is deliberately retained as an unsupported filter so Spark
  * evaluates it again after the SSTable read. SAI therefore narrows physical I/O
@@ -36,13 +35,6 @@ import org.jetbrains.annotations.Nullable;
 public final class SaiFilter implements Serializable
 {
     private static final long serialVersionUID = 1L;
-
-    public enum Kind
-    {
-        PREDICATE,
-        AND,
-        OR
-    }
 
     public enum Operator
     {
@@ -54,115 +46,35 @@ public final class SaiFilter implements Serializable
     }
 
     @NotNull
-    private final Kind kind;
-    @Nullable
     private final SaiIndex index;
-    @Nullable
+    @NotNull
     private final Operator operator;
-    @Nullable
+    @NotNull
     private final String value;
-    @Nullable
-    private final SaiFilter left;
-    @Nullable
-    private final SaiFilter right;
 
-    /** Creates a leaf SAI predicate. */
     public SaiFilter(@NotNull SaiIndex index, @NotNull Operator operator, @NotNull String value)
     {
-        this.kind = Kind.PREDICATE;
         this.index = index;
         this.operator = operator;
         this.value = value;
-        this.left = null;
-        this.right = null;
-    }
-
-    private SaiFilter(@NotNull Kind kind, @NotNull SaiFilter left, @NotNull SaiFilter right)
-    {
-        if (kind == Kind.PREDICATE)
-        {
-            throw new IllegalArgumentException("Boolean SAI filter cannot use PREDICATE kind");
-        }
-        this.kind = kind;
-        this.index = null;
-        this.operator = null;
-        this.value = null;
-        this.left = left;
-        this.right = right;
-    }
-
-    @NotNull
-    public static SaiFilter and(@NotNull SaiFilter left, @NotNull SaiFilter right)
-    {
-        return new SaiFilter(Kind.AND, left, right);
-    }
-
-    @NotNull
-    public static SaiFilter or(@NotNull SaiFilter left, @NotNull SaiFilter right)
-    {
-        return new SaiFilter(Kind.OR, left, right);
-    }
-
-    @NotNull
-    public Kind kind()
-    {
-        return kind;
-    }
-
-    public boolean isPredicate()
-    {
-        return kind == Kind.PREDICATE;
     }
 
     @NotNull
     public SaiIndex index()
     {
-        ensurePredicate();
-        return Objects.requireNonNull(index);
+        return index;
     }
 
     @NotNull
     public Operator operator()
     {
-        ensurePredicate();
-        return Objects.requireNonNull(operator);
+        return operator;
     }
 
     @NotNull
     public String value()
     {
-        ensurePredicate();
-        return Objects.requireNonNull(value);
-    }
-
-    @NotNull
-    public SaiFilter left()
-    {
-        ensureBoolean();
-        return Objects.requireNonNull(left);
-    }
-
-    @NotNull
-    public SaiFilter right()
-    {
-        ensureBoolean();
-        return Objects.requireNonNull(right);
-    }
-
-    private void ensurePredicate()
-    {
-        if (!isPredicate())
-        {
-            throw new IllegalStateException("SAI boolean node does not have predicate metadata: " + kind);
-        }
-    }
-
-    private void ensureBoolean()
-    {
-        if (isPredicate())
-        {
-            throw new IllegalStateException("SAI predicate node does not have boolean children");
-        }
+        return value;
     }
 
     @Override
@@ -177,27 +89,20 @@ public final class SaiFilter implements Serializable
             return false;
         }
         SaiFilter that = (SaiFilter) other;
-        return kind == that.kind
-               && Objects.equals(index, that.index)
+        return index.equals(that.index)
                && operator == that.operator
-               && Objects.equals(value, that.value)
-               && Objects.equals(left, that.left)
-               && Objects.equals(right, that.right);
+               && value.equals(that.value);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(kind, index, operator, value, left, right);
+        return Objects.hash(index, operator, value);
     }
 
     @Override
     public String toString()
     {
-        if (isPredicate())
-        {
-            return "SaiFilter{" + "index=" + index + ", operator=" + operator + ", value='" + value + '\'' + '}';
-        }
-        return "SaiFilter{" + kind + ", left=" + left + ", right=" + right + '}';
+        return "SaiFilter{" + "index=" + index + ", operator=" + operator + ", value='" + value + '\'' + '}';
     }
 }
