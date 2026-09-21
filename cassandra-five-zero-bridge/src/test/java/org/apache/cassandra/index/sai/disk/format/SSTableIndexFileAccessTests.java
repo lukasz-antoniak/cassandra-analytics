@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.index.sai.disk.format;
 
 import java.io.EOFException;
 import java.io.IOException;

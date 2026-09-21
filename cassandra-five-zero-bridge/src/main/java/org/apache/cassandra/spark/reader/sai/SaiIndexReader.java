@@ -17,12 +17,13 @@
  * under the License.
  */
 
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.spark.reader.sai;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -33,13 +34,18 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
+import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.PartitionPosition;
+import org.apache.cassandra.db.PartitionRangeReadCommand;
+import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
 import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
+import org.apache.cassandra.index.sai.disk.format.SSTableIndexFileAccess;
 import org.apache.cassandra.index.sai.disk.v1.MetadataSource;
 import org.apache.cassandra.index.sai.disk.v1.PerColumnIndexFiles;
 import org.apache.cassandra.index.sai.disk.v1.segment.IndexSegmentSearcher;
@@ -47,12 +53,18 @@ import org.apache.cassandra.index.sai.disk.v1.segment.SegmentMetadata;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIntersectionIterator;
 import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.iterators.KeyRangeUnionIterator;
+import org.apache.cassandra.index.sai.plan.SaiPlanAccessor;
+import org.apache.cassandra.index.sai.plan.Expression;
+import org.apache.cassandra.index.sai.plan.QueryController;
+import org.apache.cassandra.index.sai.plan.SaiQueryPlanner;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.io.sstable.Descriptor;
+import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.spark.sparksql.filters.SaiFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
+import org.apache.cassandra.spark.utils.Preconditions;
 import org.apache.cassandra.utils.TokenUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -61,10 +73,11 @@ import org.jetbrains.annotations.Nullable;
  * Opens Cassandra 5 SAI components, executes the query plan once, and materializes the resulting candidate tokens
  * as compact ranges.
  *
- * <p>For every indexed predicate, matches are first UNIONed across all SSTables. The resulting global predicate
- * streams are then composed using Cassandra's native SAI iterators: AND becomes intersection and OR becomes union.
- * This ordering is important for correctness: values contributing to a logically reconciled row may live in
- * different SSTables. Applying boolean composition inside each SSTable could therefore create false negatives.</p>
+ * <p>Cassandra's native SAI planner analyzes every conjunctive query, including same-column range folding and
+ * intersection. For every planned expression, matches are first UNIONed across all SSTables. Spark OR filters are
+ * normalized to disjunctive normal form and only the final conjunction streams are UNIONed outside Cassandra. This
+ * ordering is important for correctness: values contributing to a logically reconciled row may live in different
+ * SSTables. Applying boolean composition inside each SSTable could therefore create false negatives.</p>
  *
  * <p>SAI is a read-planning phase only. The native iterator is fully consumed before Data.db scanning starts, then
  * all SAI resources are closed. The resulting token ranges are passed to every participating SSTable so the normal
@@ -74,7 +87,6 @@ import org.jetbrains.annotations.Nullable;
 public final class SaiIndexReader
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(SaiIndexReader.class);
-    private static final long NO_TIMEOUT_MILLIS = Long.MAX_VALUE;
 
     private SaiIndexReader()
     {
@@ -88,6 +100,7 @@ public final class SaiIndexReader
      *         scan; an empty {@link CandidateTokenRanges} means SAI executed successfully and found no candidates
      */
     @NotNull
+    // TODO(lantoniak): Inspect return values.
     public static Optional<CandidateTokenRanges> findCandidateTokenRanges(@NotNull TableMetadata metadata,
                                                                           @NotNull Set<SSTable> sstables,
                                                                           @NotNull List<SaiFilter> filters,
@@ -107,18 +120,18 @@ public final class SaiIndexReader
                 return Optional.empty();
             }
 
-            List<SaiQueryPlanner.IndexPlan> resourcePlans = plan.resourcePlans();
+            List<StorageAttachedIndex> resourceIndexes = plan.resourceIndexes();
 
             List<SSTableResources> sstableResources = new ArrayList<>(sstables.size());
             for (SSTable sstable : sstables)
             {
-                SSTableResources opened = SSTableResources.open(metadata, sstable, resourcePlans);
+                SSTableResources opened = SSTableResources.open(metadata, sstable, resourceIndexes);
                 resources.add(opened);
                 sstableResources.add(opened);
             }
 
-            QueryContext queryContext = new QueryContext(null, NO_TIMEOUT_MILLIS);
-            try (KeyRangeIterator finalMatches = executePlan(plan, sstableResources, queryContext))
+            QueryContext queryContext = new QueryContext(null, Long.MAX_VALUE);
+            try (KeyRangeIterator finalMatches = executePlan(metadata, plan, sstableResources, queryContext))
             {
                 finalMatches.setOnClose(resources::close);
                 return Optional.of(collectCandidateTokenRanges(finalMatches, sparkRangeFilter));
@@ -159,74 +172,123 @@ public final class SaiIndexReader
     }
 
     @NotNull
-    private static KeyRangeIterator executePlan(@NotNull SaiQueryPlanner.Plan plan,
+    private static KeyRangeIterator executePlan(@NotNull TableMetadata metadata,
+                                                @NotNull SaiQueryPlanner.Plan plan,
                                                 @NotNull List<SSTableResources> sstableResources,
-                                                @NotNull QueryContext queryContext) throws IOException
+                                                @NotNull QueryContext queryContext)
     {
-        if (plan.isPredicate())
+        List<KeyRangeIterator> disjuncts = new ArrayList<>(plan.conjunctions().size());
+        try
+        {
+            for (SaiQueryPlanner.Conjunction conjunction : plan.conjunctions())
+            {
+                QueryController controller = new AnalyticsQueryController(metadata,
+                                                                          conjunction,
+                                                                          sstableResources,
+                                                                          queryContext);
+                // Cassandra's Operation planner owns expression analysis, same-column range folding, and the
+                // intersection of the resulting global expression streams.
+                disjuncts.add(SaiPlanAccessor.buildIterator(controller));
+            }
+            // Cassandra 5.0's Operation planner only models conjunctions. Spark OR is represented as DNF by
+            // SaiQueryPlanner, so the only composition left outside Cassandra is the union of those conjunctions.
+            return disjuncts.size() == 1 ? disjuncts.get(0) : KeyRangeUnionIterator.build(disjuncts);
+        }
+        catch (Exception exception)
+        {
+            closeAll(disjuncts);
+            throw new RuntimeException("Unable to execute native Cassandra SAI query plan", exception);
+        }
+    }
+
+    /**
+     * Supplies Cassandra's native SAI planner with the Analytics-owned SSTable search implementation.
+     *
+     * <p>The stock QueryController builds a QueryView from live Cassandra SSTableReader instances. Analytics has
+     * remote/offline SSTables instead, so index selection and expression planning remain native while this adapter
+     * replaces only the step that turns planned Expressions into KeyRangeIterators.</p>
+     */
+    private static final class AnalyticsQueryController extends QueryController
+    {
+        private final SaiQueryPlanner.Conjunction conjunction;
+        private final List<SSTableResources> sstableResources;
+        private final QueryContext queryContext;
+
+        private AnalyticsQueryController(@NotNull TableMetadata metadata,
+                                         @NotNull SaiQueryPlanner.Conjunction conjunction,
+                                         @NotNull List<SSTableResources> sstableResources,
+                                         @NotNull QueryContext queryContext)
+        {
+            super(columnFamilyStore(metadata),
+                  PartitionRangeReadCommand.allDataRead(metadata, 0L),
+                  conjunction.rowFilter(),
+                  queryContext);
+            this.conjunction = conjunction;
+            this.sstableResources = sstableResources;
+            this.queryContext = queryContext;
+        }
+
+        @Nullable
+        @Override
+        public StorageAttachedIndex indexFor(RowFilter.Expression expression)
+        {
+            return conjunction.indexFor(expression.column());
+        }
+
+        @Override
+        public boolean usesStrictFiltering()
+        {
+            return true;
+        }
+
+        @Override
+        public KeyRangeIterator.Builder getIndexQueryResults(Collection<Expression> expressions)
+        {
+            KeyRangeIntersectionIterator.Builder builder = KeyRangeIntersectionIterator.builder(expressions.size(), 0);
+            List<KeyRangeIterator> expressionMatches = new ArrayList<>(expressions.size());
+            try
+            {
+                for (Expression expression : expressions)
+                {
+                    KeyRangeIterator matches = searchAcrossSSTables(expression);
+                    expressionMatches.add(matches);
+                    builder.add(matches);
+                }
+                return builder;
+            }
+            catch (Exception exception)
+            {
+                closeAll(expressionMatches);
+                throw new RuntimeException("Unable to search in SAI SSTables", exception);
+            }
+        }
+
+        @NotNull
+        private KeyRangeIterator searchAcrossSSTables(@NotNull Expression expression) throws IOException
         {
             List<KeyRangeIterator> perSSTableMatches = new ArrayList<>(sstableResources.size());
             try
             {
                 for (SSTableResources resource : sstableResources)
                 {
-                    perSSTableMatches.add(resource.search(plan.predicate(), queryContext));
+                    perSSTableMatches.add(resource.search(expression, queryContext));
                 }
-                // Always UNION a predicate across SSTables before composing boolean operators. A logical row may be
-                // assembled from values written in different SSTables, so per-SSTable boolean composition can create
-                // false negatives.
+                // A logical row may be assembled from values written in different SSTables. Always UNION one
+                // planned expression across SSTables before intersecting different expressions.
                 return KeyRangeUnionIterator.build(perSSTableMatches);
             }
-            catch (Throwable throwable)
+            catch (Exception exception)
             {
                 closeAll(perSSTableMatches);
-                rethrowSearchFailure("Unable to execute SAI predicate", throwable);
-                throw new AssertionError("unreachable");
+                throw new RuntimeException("Unable to execute SAI expression", exception);
             }
-        }
-
-        List<KeyRangeIterator> children = new ArrayList<>(plan.children().size());
-        try
-        {
-            for (SaiQueryPlanner.Plan child : plan.children())
-            {
-                children.add(executePlan(child, sstableResources, queryContext));
-            }
-            if (plan.isOr())
-            {
-                return KeyRangeUnionIterator.build(children);
-            }
-
-            KeyRangeIntersectionIterator.Builder intersection = KeyRangeIntersectionIterator.builder(children.size(), 0);
-            for (KeyRangeIterator child : children)
-            {
-                intersection.add(child);
-            }
-            return intersection.build();
-        }
-        catch (Throwable throwable)
-        {
-            closeAll(children);
-            rethrowSearchFailure("Unable to execute SAI boolean plan", throwable);
-            throw new AssertionError("unreachable");
         }
     }
 
-    private static void rethrowSearchFailure(String message, Throwable throwable) throws IOException
+    @NotNull
+    private static ColumnFamilyStore columnFamilyStore(@NotNull TableMetadata metadata)
     {
-        if (throwable instanceof IOException)
-        {
-            throw (IOException) throwable;
-        }
-        if (throwable instanceof RuntimeException)
-        {
-            throw (RuntimeException) throwable;
-        }
-        if (throwable instanceof Error)
-        {
-            throw (Error) throwable;
-        }
-        throw new IOException(message, throwable);
+        return Keyspace.openWithoutSSTables(metadata.keyspace).getColumnFamilyStore(metadata.name);
     }
 
     /** Holds all open native SAI resources for one SSTable. */
@@ -250,7 +312,7 @@ public final class SaiIndexReader
         @NotNull
         static SSTableResources open(@NotNull TableMetadata metadata,
                                      @NotNull SSTable sstable,
-                                     @NotNull List<SaiQueryPlanner.IndexPlan> plans) throws IOException
+                                     @NotNull List<StorageAttachedIndex> indexes) throws IOException
         {
             if (sstable.customComponentNames().isEmpty())
             {
@@ -262,7 +324,7 @@ public final class SaiIndexReader
             {
                 // Descriptor is still needed for Cassandra's SAI naming/ID logic, but this
                 // path is only an identifier. No file or directory is created or opened.
-                org.apache.cassandra.io.util.File dataFile = new org.apache.cassandra.io.util.File(".", sstable.getDataFileName());
+                File dataFile = new File(".", sstable.getDataFileName());
                 Descriptor descriptor = Descriptor.fromFileWithComponent(dataFile, metadata.keyspace, metadata.name).left;
                 IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator,
                                                                          new SSTableIndexFileAccess(sstable));
@@ -271,11 +333,11 @@ public final class SaiIndexReader
                 {
                     throw new IOException("Incomplete per-SSTable SAI components: " + sstable.getDataFileName());
                 }
-                for (SaiQueryPlanner.IndexPlan plan : plans)
+                for (StorageAttachedIndex index : indexes)
                 {
-                    if (!indexDescriptor.isPerColumnIndexBuildComplete(plan.index().identifier()))
+                    if (!indexDescriptor.isPerColumnIndexBuildComplete(index.identifier()))
                     {
-                        throw new IOException("Incomplete SAI components for " + plan.index().identifier()
+                        throw new IOException("Incomplete SAI components for " + index.identifier()
                                               + " in " + sstable.getDataFileName());
                     }
                 }
@@ -283,9 +345,9 @@ public final class SaiIndexReader
                 resources = new SSTableResources(descriptor,
                                                  indexDescriptor,
                                                  indexDescriptor.newPrimaryKeyMapFactory(null));
-                for (SaiQueryPlanner.IndexPlan plan : plans)
+                for (StorageAttachedIndex index : indexes)
                 {
-                    resources.openColumn(plan);
+                    resources.openColumn(index);
                 }
                 return resources;
             }
@@ -303,9 +365,8 @@ public final class SaiIndexReader
             }
         }
 
-        private void openColumn(SaiQueryPlanner.IndexPlan plan) throws IOException
+        private void openColumn(StorageAttachedIndex index) throws IOException
         {
-            StorageAttachedIndex index = plan.index();
             if (indexDescriptor.isIndexEmpty(index.termType(), index.identifier()))
             {
                 columns.put(index, OpenColumnIndex.empty());
@@ -331,21 +392,19 @@ public final class SaiIndexReader
                 }
                 columns.put(index, column);
             }
-            catch (Throwable throwable)
+            catch (Exception exception)
             {
                 column.close();
-                if (throwable instanceof IOException)
-                {
-                    throw (IOException) throwable;
-                }
-                throw new IOException("Unable to open SAI column " + index.identifier(), throwable);
+                throw new IOException("Unable to open SAI column " + index.identifier(), exception);
             }
         }
 
         @NotNull
-        KeyRangeIterator search(@NotNull SaiQueryPlanner.IndexPlan plan, @NotNull QueryContext queryContext) throws IOException
+        KeyRangeIterator search(@NotNull Expression expression, @NotNull QueryContext queryContext) throws IOException
         {
-            OpenColumnIndex column = columns.get(plan.index());
+            Preconditions.checkState(!expression.isNotIndexed(), "SAI planner produced an unindexed expression: " + expression);
+            StorageAttachedIndex index = expression.getIndex();
+            OpenColumnIndex column = columns.get(index);
             if (column == null || column.segments.isEmpty())
             {
                 return KeyRangeIterator.empty();
@@ -358,18 +417,14 @@ public final class SaiIndexReader
                 {
                     Bounds<PartitionPosition> keyRange = new Bounds<>(segment.metadata.minKey.partitionKey(),
                                                                       segment.metadata.maxKey.partitionKey());
-                    segmentMatches.add(segment.searcher.search(plan.expression(), keyRange, queryContext));
+                    segmentMatches.add(segment.searcher.search(expression, keyRange, queryContext));
                 }
                 return KeyRangeUnionIterator.build(segmentMatches);
             }
-            catch (Throwable throwable)
+            catch (Exception exception)
             {
                 closeAll(segmentMatches);
-                if (throwable instanceof IOException)
-                {
-                    throw (IOException) throwable;
-                }
-                throw new IOException("Unable to search SAI column " + plan.index().identifier(), throwable);
+                throw new IOException("Unable to search SAI column: " + index.identifier(), exception);
             }
         }
 
@@ -483,7 +538,7 @@ public final class SaiIndexReader
         }
         catch (IOException exception)
         {
-            LOGGER.debug("Unable to close SAI resource", exception);
+            LOGGER.debug("Failed to close SAI resource", exception);
         }
     }
 }

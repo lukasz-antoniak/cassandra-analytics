@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.spark.reader.sai;
 
 import java.math.BigInteger;
 import java.util.ArrayList;

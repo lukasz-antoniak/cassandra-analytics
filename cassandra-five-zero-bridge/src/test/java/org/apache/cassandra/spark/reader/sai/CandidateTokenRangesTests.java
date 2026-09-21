@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.spark.reader.sai;
 
 import java.math.BigInteger;
 import java.util.Arrays;
@@ -24,6 +24,8 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.bridge.TokenRange;
+import org.apache.cassandra.spark.reader.DataDbRange;
+import org.assertj.core.api.Assertions;
 import org.assertj.core.groups.Tuple;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,11 +72,11 @@ class CandidateTokenRangesTests
     @Test
     void testDataDbRangesMergePhysicalSiblings()
     {
-        assertThat(DataDbRange.mergeAdjacent(Arrays.asList(new DataDbRange(10, 20),
-                                                           new DataDbRange(20, 30),
-                                                           new DataDbRange(40, 50))))
-                .extracting(DataDbRange::start, DataDbRange::end)
-                .containsExactly(Tuple.tuple(10L, 30L),
+        Assertions.assertThat(DataDbRange.mergeAdjacent(Arrays.asList(new DataDbRange(10, 20),
+                                                                      new DataDbRange(20, 30),
+                                                                      new DataDbRange(40, 50))))
+                  .extracting(DataDbRange::start, DataDbRange::end)
+                  .containsExactly(Tuple.tuple(10L, 30L),
                                  Tuple.tuple(40L, 50L));
     }
 }

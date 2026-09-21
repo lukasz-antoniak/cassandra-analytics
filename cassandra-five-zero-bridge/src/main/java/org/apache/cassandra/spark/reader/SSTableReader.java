@@ -80,6 +80,7 @@ import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.analytics.reader.common.RawInputStream;
 import org.apache.cassandra.spark.reader.common.SSTableStreamException;
+import org.apache.cassandra.spark.reader.sai.CandidateTokenRanges;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.PruneColumnFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;

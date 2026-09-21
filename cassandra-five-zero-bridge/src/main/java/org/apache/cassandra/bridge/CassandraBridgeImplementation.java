@@ -95,14 +95,14 @@ import org.apache.cassandra.spark.data.complex.CqlTuple;
 import org.apache.cassandra.spark.data.complex.CqlUdt;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
 import org.apache.cassandra.spark.reader.BtiIndexReader;
-import org.apache.cassandra.spark.reader.CandidateTokenRanges;
+import org.apache.cassandra.spark.reader.sai.CandidateTokenRanges;
 import org.apache.cassandra.spark.reader.CompactionStreamScanner;
 import org.apache.cassandra.spark.reader.EmptyStreamScanner;
 import org.apache.cassandra.spark.reader.IndexEntry;
 import org.apache.cassandra.spark.reader.BigIndexReader;
 import org.apache.cassandra.spark.reader.ReaderUtils;
 import org.apache.cassandra.spark.reader.RowData;
-import org.apache.cassandra.spark.reader.SaiIndexReader;
+import org.apache.cassandra.spark.reader.sai.SaiIndexReader;
 import org.apache.cassandra.spark.reader.SchemaBuilder;
 import org.apache.cassandra.spark.reader.SparkSSTableReader;
 import org.apache.cassandra.spark.reader.StreamScanner;
@@ -273,8 +273,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                                             sparkRangeFilter);
         if (candidates.isEmpty())
         {
-            // SAI is an optimization. Since no Data.db rows have been emitted, preserve the existing behavior and
-            // safely fall back to one normal scan.
+            // No candidate token ranges selected form SAI filter, use standard full-table scan.
             return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
                                          Collections.emptyList(), null, sstableTimeRangeFilter, columnFilter,
                                          readIndexOffset, useIncrementalRepair, stats);

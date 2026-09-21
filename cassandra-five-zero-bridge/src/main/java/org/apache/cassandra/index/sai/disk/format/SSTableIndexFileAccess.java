@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.cassandra.spark.reader;
+package org.apache.cassandra.index.sai.disk.format;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -30,7 +30,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Set;
 
-import org.apache.cassandra.index.sai.disk.format.IndexDescriptor;
 import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
@@ -40,7 +39,7 @@ import org.apache.cassandra.spark.data.SSTable;
  * Adapts an Analytics {@link SSTable}'s custom components to Cassandra SAI's
  * {@link FileHandle}-based random-access API without creating local files.
  */
-final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
+public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
 {
     // Avoid Cassandra's 4 KiB default, which would turn random SAI traversal into
     // one Sidecar request per 4 KiB. This is deliberately a small/tunable first cut.
@@ -49,7 +48,7 @@ final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
     private final SSTable sstable;
     private final Set<String> components;
 
-    SSTableIndexFileAccess(SSTable sstable)
+    public SSTableIndexFileAccess(SSTable sstable)
     {
         this.sstable = sstable;
         this.components = sstable.customComponentNames();
@@ -87,7 +86,7 @@ final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
     }
 
     /** Read-only FileChannel used by Cassandra's SimpleChunkReader. */
-    static final class SSTableFileChannel extends FileChannel
+    public static final class SSTableFileChannel extends FileChannel
     {
         private final SSTable sstable;
         private final String componentName;
