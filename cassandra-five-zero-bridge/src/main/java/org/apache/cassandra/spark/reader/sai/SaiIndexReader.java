@@ -41,6 +41,7 @@ import org.apache.cassandra.db.PartitionPosition;
 import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.dht.Bounds;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -71,7 +72,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Opens Cassandra 5 SAI components, executes the query plan once, and materializes the resulting candidate tokens
- * as compact ranges.
+ * as an exact compact token set.
  *
  * <p>Cassandra's native SAI planner analyzes the conjunctive query, including same-column range folding and
  * intersection. For every planned expression, matches are first UNIONed across all SSTables before Cassandra
@@ -80,7 +81,7 @@ import org.jetbrains.annotations.Nullable;
  * false negatives.</p>
  *
  * <p>SAI is a read-planning phase only. The native iterator is fully consumed before Data.db scanning starts, then
- * all SAI resources are closed. The resulting token ranges are passed to every participating SSTable so the normal
+ * all SAI resources are closed. The resulting exact tokens are shared by every participating SSTable so the normal
  * Cassandra compaction/reconciliation path can still apply newer values, TTLs and tombstones. Spark keeps the
  * original predicates as residual filters, so stale index entries can only create false positives.</p>
  */
@@ -94,20 +95,20 @@ public final class SaiIndexReader
     }
 
     /**
-     * Executes all SAI predicates once and returns the sorted candidate tokens as compact ranges.
+     * Executes all SAI predicates once and returns the sorted candidate tokens as an exact compact token set.
      *
      * @return empty Optional when SAI cannot safely be used and the caller should fall back to the ordinary SSTable
-     *         scan; an empty {@link CandidateTokenRanges} means SAI executed successfully and found no candidates
+     *         scan; an empty {@link CandidateTokens} means SAI executed successfully and found no candidates
      */
     @NotNull
-    public static Optional<CandidateTokenRanges> findCandidateTokenRanges(@NotNull TableMetadata metadata,
-                                                                          @NotNull Set<SSTable> sstables,
-                                                                          @NotNull List<SaiFilter> filters,
-                                                                          @Nullable SparkRangeFilter sparkRangeFilter)
+    public static Optional<CandidateTokens> findCandidateTokens(@NotNull TableMetadata metadata,
+                                                                  @NotNull Set<SSTable> sstables,
+                                                                  @NotNull List<SaiFilter> filters,
+                                                                  @Nullable SparkRangeFilter sparkRangeFilter)
     {
         if (sstables.isEmpty() || filters.isEmpty())
         {
-            return Optional.of(CandidateTokenRanges.empty());
+            return Optional.of(CandidateTokens.empty());
         }
 
         ResourceGroup resources = new ResourceGroup();
@@ -133,7 +134,7 @@ public final class SaiIndexReader
             try (KeyRangeIterator finalMatches = executePlan(metadata, plan, sstableResources, queryContext))
             {
                 finalMatches.setOnClose(resources::close);
-                return Optional.of(collectCandidateTokenRanges(finalMatches, sparkRangeFilter));
+                return Optional.of(collectCandidateTokens(finalMatches, sparkRangeFilter, metadata.partitioner));
             }
         }
         catch (Throwable throwable)
@@ -146,18 +147,19 @@ public final class SaiIndexReader
     }
 
     /**
-     * Fully consumes the sorted native SAI result stream and converts it to the compact token-range
-     * representation used by the Data.db read-planning phase.
+     * Fully consumes the sorted native SAI result stream and converts it to the exact token-set representation
+     * used by the Data.db read-planning phase.
      *
      * <p>This method deliberately accepts an {@link Iterator} rather than a {@link KeyRangeIterator};
-     * resource ownership remains with {@link #findCandidateTokenRanges(TableMetadata, Set, List, SparkRangeFilter)}.
+     * resource ownership remains with {@link #findCandidateTokens(TableMetadata, Set, List, SparkRangeFilter)}.
      * Keeping the conversion separate also makes the one-pass materialization semantics directly testable.</p>
      */
     @NotNull
-    static CandidateTokenRanges collectCandidateTokenRanges(@NotNull Iterator<PrimaryKey> matches,
-                                                            @Nullable SparkRangeFilter sparkRangeFilter)
+    static CandidateTokens collectCandidateTokens(@NotNull Iterator<PrimaryKey> matches,
+                                                  @Nullable SparkRangeFilter sparkRangeFilter,
+                                                  @NotNull IPartitioner partitioner)
     {
-        CandidateTokenRanges.Builder candidates = CandidateTokenRanges.builder();
+        CandidateTokens.Builder candidates = CandidateTokens.builder(partitioner);
         while (matches.hasNext())
         {
             DecoratedKey partitionKey = matches.next().partitionKey();

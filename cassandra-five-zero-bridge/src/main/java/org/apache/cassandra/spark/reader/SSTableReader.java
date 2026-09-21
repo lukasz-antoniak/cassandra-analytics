@@ -80,7 +80,7 @@ import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.analytics.reader.common.RawInputStream;
 import org.apache.cassandra.spark.reader.common.SSTableStreamException;
-import org.apache.cassandra.spark.reader.sai.CandidateTokenRanges;
+import org.apache.cassandra.spark.reader.sai.CandidateTokens;
 import org.apache.cassandra.spark.sparksql.filters.PartitionKeyFilter;
 import org.apache.cassandra.spark.sparksql.filters.PruneColumnFilter;
 import org.apache.cassandra.spark.sparksql.filters.SparkRangeFilter;
@@ -121,9 +121,9 @@ public class SSTableReader implements SparkSSTableReader, Scannable
     @NotNull
     private final List<PartitionKeyFilter> partitionKeyFilters;
     @Nullable
-    private final CandidateTokenRanges candidateTokenRanges;
-    @NotNull
-    private final List<TokenRange> sstableTokenRanges;
+    private final CandidateTokens candidateTokens;
+    @Nullable
+    private final CandidateTokens.Slice sstableCandidateTokens;
     @NotNull
     private List<DataDbRange> dataDbRanges = Collections.emptyList();
     @NotNull
@@ -155,7 +155,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         @NotNull
         final List<PartitionKeyFilter> partitionKeyFilters = new ArrayList<>();
         @Nullable
-        CandidateTokenRanges candidateTokenRanges = null;
+        CandidateTokens candidateTokens = null;
         @NotNull
         SSTableTimeRangeFilter sstableTimeRangeFilter = SSTableTimeRangeFilter.ALL;
 
@@ -186,9 +186,9 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             return this;
         }
 
-        public Builder withCandidateTokenRanges(@Nullable CandidateTokenRanges candidateTokenRanges)
+        public Builder withCandidateTokens(@Nullable CandidateTokens candidateTokens)
         {
-            this.candidateTokenRanges = candidateTokenRanges;
+            this.candidateTokens = candidateTokens;
             return this;
         }
 
@@ -243,7 +243,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                                      ssTable,
                                      sparkRangeFilter,
                                      partitionKeyFilters,
-                                     candidateTokenRanges,
+                                     candidateTokens,
                                      sstableTimeRangeFilter,
                                      columnFilter,
                                      readIndexOffset,
@@ -264,7 +264,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                          @NotNull SSTable ssTable,
                          @Nullable SparkRangeFilter sparkRangeFilter,
                          @NotNull List<PartitionKeyFilter> partitionKeyFilters,
-                         @Nullable CandidateTokenRanges candidateTokenRanges,
+                         @Nullable CandidateTokens candidateTokens,
                          @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
                          @Nullable PruneColumnFilter columnFilter,
                          boolean readIndexOffset,
@@ -279,7 +279,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         this.stats = stats;
         this.isRepaired = isRepaired;
         this.sparkRangeFilter = sparkRangeFilter;
-        this.candidateTokenRanges = candidateTokenRanges;
+        this.candidateTokens = candidateTokens;
 
         Descriptor descriptor = ReaderUtils.constructDescriptor(metadata.keyspace, metadata.name, ssTable);
         this.version = descriptor.version;
@@ -327,13 +327,13 @@ public class SSTableReader implements SparkSSTableReader, Scannable
         List<PartitionKeyFilter> matchingKeyFilters = partitionKeyFilters.stream()
                 .filter(filter -> readerRange.contains(filter.token()))
                 .collect(Collectors.toList());
-        this.sstableTokenRanges = candidateTokenRanges == null
-                                  ? Collections.emptyList()
-                                  : candidateTokenRanges.overlapping(readerRange);
+        this.sstableCandidateTokens = candidateTokens == null
+                                      ? null
+                                      : candidateTokens.slice(firstToken, lastToken);
         boolean overlapsSparkRange = sparkRangeFilter == null || SparkSSTableReader.overlaps(this, sparkRangeFilter.tokenRange());
-        boolean overlapsCandidateRanges = candidateTokenRanges == null || !sstableTokenRanges.isEmpty();
+        boolean overlapsCandidateTokens = candidateTokens == null || !sstableCandidateTokens.isEmpty();
         if (!overlapsSparkRange  // SSTable doesn't overlap with Spark worker token range
-                || !overlapsCandidateRanges
+                || !overlapsCandidateTokens
                 || (matchingKeyFilters.isEmpty() && !partitionKeyFilters.isEmpty()))  // No matching partition key filters overlap with SSTable
         {
             this.partitionKeyFilters = Collections.emptyList();
@@ -452,17 +452,17 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                                                 DeserializationHelper.Flag.FROM_REMOTE,
                                                 buildColumnFilter(metadata, columnFilter));
         this.metadata = metadata;
-        boolean candidateRangesResolved = false;
+        boolean candidateDataRangesResolved = false;
 
         if (readIndexOffset)
         {
-            if (candidateTokenRanges != null)
+            if (candidateTokens != null)
             {
                 List<DataDbRange> resolved = readCandidateDataRanges(summary, descriptor);
                 if (resolved != null)
                 {
                     dataDbRanges = resolved;
-                    candidateRangesResolved = true;
+                    candidateDataRangesResolved = true;
                     if (!dataDbRanges.isEmpty())
                     {
                         startOffset = dataDbRanges.get(0).start();
@@ -493,7 +493,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             LOGGER.warn("Reading SSTable without looking up start/end offset, performance will potentially be degraded");
         }
 
-        if (candidateRangesResolved && dataDbRanges.isEmpty())
+        if (candidateDataRangesResolved && dataDbRanges.isEmpty())
         {
             // The candidate token set overlaps this SSTable's token bounds, but none of those tokens are present.
             return;
@@ -515,18 +515,19 @@ public class SSTableReader implements SparkSSTableReader, Scannable
             if (ssTable.isBigFormat())
             {
                 return IndexDbUtils.findDataDbRanges(summary == null ? null : summary.summary(),
-                                                     sstableTokenRanges,
+                                                     sstableCandidateTokens,
                                                      metadata.partitioner,
                                                      ssTable,
                                                      stats);
             }
-            return BtiReaderUtils.dataRangesInDataFile(ssTable, metadata, descriptor, sstableTokenRanges);
+            return BtiReaderUtils.dataRangesInDataFile(ssTable, metadata, descriptor,
+                                                       sstableCandidateTokens);
         }
         catch (IOException exception)
         {
             // Range planning is an optimization. Fall back to a sequential Data.db scan while retaining the
             // candidate-token predicate so correctness is unchanged.
-            LOGGER.warn("Unable to resolve candidate token ranges to Data.db offsets for sstable='{}'; "
+            LOGGER.warn("Unable to resolve candidate tokens to Data.db offsets for sstable='{}'; "
                         + "falling back to sequential scan", ssTable, exception);
             return null;
         }
@@ -777,16 +778,16 @@ public class SSTableReader implements SparkSSTableReader, Scannable
                 || partitionKeyFilters.stream().anyMatch(filter -> filter.matches(key.getKey()));
         }
 
-        public boolean overlapsCandidateTokenRanges(BigInteger token)
+        public boolean overlapsCandidateTokens(BigInteger token)
         {
-            return candidateTokenRanges == null || candidateTokenRanges.contains(token);
+            return candidateTokens == null || candidateTokens.contains(token);
         }
 
         public boolean overlaps(DecoratedKey key, BigInteger token)
         {
             return overlapsSparkTokenRange(token)
                    && overlapsPartitionFilters(key)
-                   && overlapsCandidateTokenRanges(token);
+                   && overlapsCandidateTokens(token);
         }
 
         private boolean advanceToNextDataDbRange() throws IOException

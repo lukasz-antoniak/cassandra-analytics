@@ -95,7 +95,7 @@ import org.apache.cassandra.spark.data.complex.CqlTuple;
 import org.apache.cassandra.spark.data.complex.CqlUdt;
 import org.apache.cassandra.spark.data.partitioner.Partitioner;
 import org.apache.cassandra.spark.reader.BtiIndexReader;
-import org.apache.cassandra.spark.reader.sai.CandidateTokenRanges;
+import org.apache.cassandra.spark.reader.sai.CandidateTokens;
 import org.apache.cassandra.spark.reader.CompactionStreamScanner;
 import org.apache.cassandra.spark.reader.EmptyStreamScanner;
 import org.apache.cassandra.spark.reader.IndexEntry;
@@ -267,26 +267,26 @@ public class CassandraBridgeImplementation extends CassandraBridge
         }
 
         Set<SSTable> sstables = references.stream().map(reference -> reference.sstable).collect(Collectors.toSet());
-        Optional<CandidateTokenRanges> candidates = SaiIndexReader.findCandidateTokenRanges(metadata,
+        Optional<CandidateTokens> candidates = SaiIndexReader.findCandidateTokens(metadata,
                                                                                             sstables,
                                                                                             saiFilters,
                                                                                             sparkRangeFilter);
         if (candidates.isEmpty())
         {
-            // No candidate token ranges selected form SAI filter, use standard full-table scan.
+            // SAI could not produce a safe candidate token set, use the standard full-table scan.
             return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
                                          Collections.emptyList(), null, sstableTimeRangeFilter, columnFilter,
                                          readIndexOffset, useIncrementalRepair, stats);
         }
 
-        CandidateTokenRanges candidateTokenRanges = candidates.get();
-        if (candidateTokenRanges.isEmpty())
+        CandidateTokens candidateTokens = candidates.get();
+        if (candidateTokens.isEmpty())
         {
             return EmptyStreamScanner.INSTANCE;
         }
 
         return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
-                                     Collections.emptyList(), candidateTokenRanges, sstableTimeRangeFilter,
+                                     Collections.emptyList(), candidateTokens, sstableTimeRangeFilter,
                                      columnFilter, readIndexOffset, useIncrementalRepair, stats);
     }
 
@@ -297,7 +297,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                 @NotNull Set<SaiSSTableReference> references,
                                                                 @Nullable SparkRangeFilter sparkRangeFilter,
                                                                 @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
-                                                                @Nullable CandidateTokenRanges candidateTokenRanges,
+                                                                @Nullable CandidateTokens candidateTokens,
                                                                 @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
                                                                 @Nullable PruneColumnFilter columnFilter,
                                                                 boolean readIndexOffset,
@@ -311,7 +311,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                         return org.apache.cassandra.spark.reader.SSTableReader.builder(metadata, reference.sstable)
                                                                               .withSparkRangeFilter(sparkRangeFilter)
                                                                               .withPartitionKeyFilters(partitionKeyFilters)
-                                                                              .withCandidateTokenRanges(candidateTokenRanges)
+                                                                              .withCandidateTokens(candidateTokens)
                                                                               .withTimeRangeFilter(sstableTimeRangeFilter)
                                                                               .withColumnFilter(columnFilter)
                                                                               .withReadIndexOffset(readIndexOffset)

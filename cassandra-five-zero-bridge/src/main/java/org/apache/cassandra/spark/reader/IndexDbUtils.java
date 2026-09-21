@@ -25,10 +25,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 
@@ -36,6 +33,7 @@ import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummary;
 import org.apache.cassandra.spark.data.SSTable;
+import org.apache.cassandra.spark.reader.sai.CandidateTokens;
 import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.spark.utils.ByteBufferUtils;
 import org.apache.cassandra.utils.ByteBufferUtil;
@@ -54,23 +52,21 @@ final class IndexDbUtils
 
     @NotNull
     public static List<DataDbRange> findDataDbRanges(@Nullable IndexSummary indexSummary,
-                                                     @NotNull Collection<TokenRange> ranges,
+                                                     @NotNull CandidateTokens.Slice candidates,
                                                      @NotNull IPartitioner partitioner,
                                                      @NotNull SSTable ssTable,
                                                      @NotNull Stats stats) throws IOException
     {
-        if (ranges.isEmpty())
+        if (candidates.isEmpty())
         {
             return Collections.emptyList();
         }
 
-        List<TokenRange> sortedRanges = new ArrayList<>(ranges);
-        sortedRanges.sort(Comparator.comparing(TokenRange::firstEnclosedValue));
         long searchStartOffset = indexSummary == null
                                  ? 0L
                                  : SummaryDbUtils.findIndexOffsetInSummary(indexSummary,
                                                                            partitioner,
-                                                                           sortedRanges.get(0).firstEnclosedValue());
+                                                                           candidates.first());
 
         try (InputStream is = ssTable.openPrimaryIndexStream())
         {
@@ -82,11 +78,15 @@ final class IndexDbUtils
             DataInputStream in = new DataInputStream(is);
             ByteBufferUtils.skipFully(in, searchStartOffset);
 
-            List<DataDbRange> result = new ArrayList<>();
-            int rangeIndex = 0;
-            Long dataRangeStart = null;
+            DataDbRange.Accumulator result =
+            new DataDbRange.Accumulator(DataDbRange.DEFAULT_MAX_COALESCE_GAP_BYTES);
+            int candidateIndex = 0;
+            Long matchedDataPosition = null;
 
-            while (rangeIndex < sortedRanges.size())
+            // Index.db and the SAI candidate set are both token sorted. Walk them together instead of creating a
+            // TokenRange object for every candidate. Keep a candidate selected while equal-token Index.db entries
+            // are observed so rare partitioner collisions cannot create false negatives.
+            while (candidateIndex < candidates.size() || matchedDataPosition != null)
             {
                 BigInteger token;
                 long dataPosition;
@@ -101,43 +101,30 @@ final class IndexDbUtils
                     break;
                 }
 
-                TokenRange range = sortedRanges.get(rangeIndex);
-                while (token.compareTo(range.upperEndpoint()) > 0)
+                if (matchedDataPosition != null)
                 {
-                    if (dataRangeStart != null)
-                    {
-                        result.add(new DataDbRange(dataRangeStart, dataPosition));
-                        dataRangeStart = null;
-                    }
-
-                    rangeIndex++;
-                    if (rangeIndex >= sortedRanges.size())
-                    {
-                        break;
-                    }
-                    range = sortedRanges.get(rangeIndex);
+                    result.add(matchedDataPosition, dataPosition);
+                    matchedDataPosition = null;
                 }
 
-                if (rangeIndex >= sortedRanges.size())
+                while (candidateIndex < candidates.size() && candidates.compareAt(candidateIndex, token) < 0)
                 {
-                    break;
+                    candidateIndex++;
                 }
 
-                if (token.compareTo(range.lowerEndpoint()) > 0
-                    && token.compareTo(range.upperEndpoint()) <= 0
-                    && dataRangeStart == null)
+                if (candidateIndex < candidates.size() && candidates.compareAt(candidateIndex, token) == 0)
                 {
-                    dataRangeStart = dataPosition;
+                    matchedDataPosition = dataPosition;
                 }
             }
 
-            if (dataRangeStart != null)
+            if (matchedDataPosition != null)
             {
                 // No following Index.db entry was available to provide an exact end. The stream reader will stop at
                 // EOF (or its Spark token bound), so an unbounded final interval is safe.
-                result.add(new DataDbRange(dataRangeStart, Long.MAX_VALUE));
+                result.add(matchedDataPosition, Long.MAX_VALUE);
             }
-            return DataDbRange.mergeAdjacent(result);
+            return result.build();
         }
     }
 

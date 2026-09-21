@@ -49,8 +49,8 @@ class SaiIndexReaderTests
     @Test
     void testNoSSTablesProducesSuccessfulEmptyReadPlan()
     {
-        Optional<CandidateTokenRanges> result =
-        SaiIndexReader.findCandidateTokenRanges(mock(TableMetadata.class),
+        Optional<CandidateTokens> result =
+        SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
                                                 Collections.emptySet(),
                                                 Collections.singletonList(null),
                                                 null);
@@ -62,8 +62,8 @@ class SaiIndexReaderTests
     @Test
     void testNoFiltersProducesSuccessfulEmptyReadPlan()
     {
-        Optional<CandidateTokenRanges> result =
-        SaiIndexReader.findCandidateTokenRanges(mock(TableMetadata.class),
+        Optional<CandidateTokens> result =
+        SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
                                                 Collections.singleton(mock(SSTable.class)),
                                                 Collections.emptyList(),
                                                 null);
@@ -73,7 +73,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokenRangesConsumesAllMatchesAndDeduplicatesPartitionTokens()
+    void testCollectCandidateTokensConsumesAllMatchesAndDeduplicatesPartitionTokens()
     {
         List<Candidate> candidates = sortedCandidates("alpha", "bravo", "charlie");
 
@@ -85,19 +85,19 @@ class SaiIndexReaderTests
                                                  primaryKey(candidates.get(1).partitionKey),
                                                  primaryKey(candidates.get(2).partitionKey));
 
-        CandidateTokenRanges result =
-        SaiIndexReader.collectCandidateTokenRanges(matches.iterator(), null);
+        CandidateTokens result =
+        SaiIndexReader.collectCandidateTokens(matches.iterator(), null, Murmur3Partitioner.instance);
 
         assertThat(result.isEmpty()).isFalse();
         for (Candidate candidate : candidates)
         {
             assertThat(result.contains(candidate.token)).isTrue();
         }
-        assertThat(enclosedTokenCount(result)).isEqualTo(candidates.size());
+        assertThat(result.size()).isEqualTo(candidates.size());
     }
 
     @Test
-    void testCollectCandidateTokenRangesAppliesSparkTokenRange()
+    void testCollectCandidateTokensAppliesSparkTokenRange()
     {
         List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five");
         Candidate firstIncluded = candidates.get(1);
@@ -105,39 +105,39 @@ class SaiIndexReaderTests
         SparkRangeFilter sparkRangeFilter =
         SparkRangeFilter.create(TokenRange.closed(firstIncluded.token, lastIncluded.token));
 
-        CandidateTokenRanges result =
-        SaiIndexReader.collectCandidateTokenRanges(primaryKeys(candidates).iterator(), sparkRangeFilter);
+        CandidateTokens result =
+        SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter, Murmur3Partitioner.instance);
 
         assertThat(result.contains(candidates.get(0).token)).isFalse();
         assertThat(result.contains(firstIncluded.token)).isTrue();
         assertThat(result.contains(candidates.get(2).token)).isTrue();
         assertThat(result.contains(lastIncluded.token)).isTrue();
         assertThat(result.contains(candidates.get(4).token)).isFalse();
-        assertThat(enclosedTokenCount(result)).isEqualTo(3);
+        assertThat(result.size()).isEqualTo(3);
     }
 
     @Test
-    void testCollectCandidateTokenRangesReturnsEmptyWhenSparkRangeRejectsEveryMatch()
+    void testCollectCandidateTokensReturnsEmptyWhenSparkRangeRejectsEveryMatch()
     {
         List<Candidate> candidates = sortedCandidates("red", "green", "blue");
         BigInteger upper = candidates.get(0).token.subtract(BigInteger.ONE);
         SparkRangeFilter sparkRangeFilter =
         SparkRangeFilter.create(TokenRange.singleton(upper));
 
-        CandidateTokenRanges result =
-        SaiIndexReader.collectCandidateTokenRanges(primaryKeys(candidates).iterator(), sparkRangeFilter);
+        CandidateTokens result =
+        SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter, Murmur3Partitioner.instance);
 
         assertThat(result.isEmpty()).isTrue();
     }
 
     @Test
-    void testCollectCandidateTokenRangesRejectsOutOfOrderNativeResults()
+    void testCollectCandidateTokensRejectsOutOfOrderNativeResults()
     {
         List<Candidate> candidates = sortedCandidates("left", "middle", "right");
         List<PrimaryKey> outOfOrder = Arrays.asList(primaryKey(candidates.get(1).partitionKey),
                                                     primaryKey(candidates.get(0).partitionKey));
 
-        assertThatThrownBy(() -> SaiIndexReader.collectCandidateTokenRanges(outOfOrder.iterator(), null))
+        assertThatThrownBy(() -> SaiIndexReader.collectCandidateTokens(outOfOrder.iterator(), null, Murmur3Partitioner.instance))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("sorted order");
     }
@@ -171,18 +171,6 @@ class SaiIndexReaderTests
         PrimaryKey primaryKey = mock(PrimaryKey.class);
         when(primaryKey.partitionKey()).thenReturn(partitionKey);
         return primaryKey;
-    }
-
-    private static int enclosedTokenCount(CandidateTokenRanges ranges)
-    {
-        BigInteger count = BigInteger.ZERO;
-        for (TokenRange range : ranges.ranges())
-        {
-            count = count.add(range.upperEndpoint()
-                                   .subtract(range.firstEnclosedValue())
-                                   .add(BigInteger.ONE));
-        }
-        return count.intValueExact();
     }
 
     private static final class Candidate
