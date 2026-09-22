@@ -20,6 +20,7 @@ package org.apache.cassandra.analytics;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -124,17 +125,18 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         calculateFullScanBaseline();
 
         // Alternative pushdown filter with Spark SQL context:
-        // Dataset<Row> input = bulkReaderDataFrame(TABLE).load();
+        // Dataset<Row> input = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "true")).load();
         // input.createOrReplaceTempView("sai_reader_" + view);
         // List<Row> matches = getOrCreateSparkSession().sql("SELECT id, score, state, payload "
         //                                                   + "FROM sai_reader_" + view
         //                                                   + " WHERE " + whereClause)
         //                                              .collectAsList();
 
-        List<Row> matches = bulkReaderDataFrame(TABLE).load()
-                                                      .filter(whereClause)
-                                                      .select("id", "score", "state", "payload")
-                                                      .collectAsList();
+        List<Row> matches = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "true"))
+                            .load()
+                            .filter(whereClause)
+                            .select("id", "score", "state", "payload")
+                            .collectAsList();
         assertThat(matches).hasSize(expectedRows);
 
         long saiReadBytes = TEST_STATS.readBytes();
@@ -235,9 +237,10 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
     {
         if (fullScanBytes < 0)
         {
-            List<Row> allRows = bulkReaderDataFrame(TABLE).load()
-                                                          .select("id", "score", "state", "payload")
-                                                          .collectAsList();
+            List<Row> allRows = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "false"))
+                                .load()
+                                .select("id", "score", "state", "payload")
+                                .collectAsList();
             assertThat(allRows).hasSize(BACKGROUND_ROWS + 3);
 
             fullScanBytes = TEST_STATS.readBytes();

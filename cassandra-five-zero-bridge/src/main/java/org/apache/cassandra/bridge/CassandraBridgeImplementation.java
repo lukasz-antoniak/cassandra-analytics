@@ -245,7 +245,8 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                        boolean readIndexOffset,
                                                        boolean useIncrementalRepair,
                                                        @NotNull Stats stats,
-                                                       @NotNull List<SaiFilter> saiFilters)
+                                                       @NotNull List<SaiFilter> saiFilters,
+                                                       int saiMaxCandidateTokens)
     {
         // A complete partition-key lookup is already more selective and cheaper than consulting SAI.
         if (!partitionKeyFilters.isEmpty() || saiFilters.isEmpty())
@@ -268,9 +269,10 @@ public class CassandraBridgeImplementation extends CassandraBridge
 
         Set<SSTable> sstables = references.stream().map(reference -> reference.sstable).collect(Collectors.toSet());
         Optional<CandidateTokens> candidates = SaiIndexReader.findCandidateTokens(metadata,
-                                                                                            sstables,
-                                                                                            saiFilters,
-                                                                                            sparkRangeFilter);
+                                                                                  sstables,
+                                                                                  saiFilters,
+                                                                                  sparkRangeFilter,
+                                                                                  saiMaxCandidateTokens);
         if (candidates.isEmpty())
         {
             // No candidate token ranges selected form SAI filter, use standard full-table scan.

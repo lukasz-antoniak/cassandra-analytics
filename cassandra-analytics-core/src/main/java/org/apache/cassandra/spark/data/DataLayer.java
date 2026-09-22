@@ -274,6 +274,16 @@ public abstract class DataLayer implements Serializable
         return true;
     }
 
+    public boolean saiFilteringEnabled()
+    {
+        return ClientConfig.DEFAULT_SAI_FILTERING_ENABLED;
+    }
+
+    public int saiMaxCandidateTokens()
+    {
+        return ClientConfig.DEFAULT_SAI_MAX_CANDIDATE_TOKENS;
+    }
+
     /**
      * @return CompactionScanner for iterating over one or more SSTables, compacting data and purging tombstones
      */
@@ -315,7 +325,8 @@ public abstract class DataLayer implements Serializable
                                              readIndexOffset(),
                                              useIncrementalRepair(),
                                              stats(),
-                                             saiFilters);
+                                             saiFilteringEnabled() ? saiFilters : Collections.emptyList(),
+                                             saiMaxCandidateTokens());
     }
 
     /**
@@ -437,12 +448,45 @@ public abstract class DataLayer implements Serializable
             return null;
         }
 
-        SaiIndex index = saiIndexes().stream()
-                                     .filter(candidate -> candidate.column().equals(attribute)
-                                                          || candidate.column().equalsIgnoreCase(attribute))
-                                     .findFirst()
-                                     .orElse(null);
+        SaiIndex index = saiIndexForAttribute(attribute);
         return index == null ? null : new SaiFilter(index, operator, String.valueOf(value));
+    }
+
+    /**
+     * Resolves a Spark attribute to an indexed Cassandra column without allowing case-insensitive matching to pick
+     * an arbitrary column when quoted/case-sensitive identifiers differ only by case.
+     *
+     * Exact spelling always wins. Case-insensitive matching is retained for the normal unquoted identifier path,
+     * but only when all matching indexes refer to the same Cassandra column spelling. If, for example, both
+     * {@code Foo} and {@code foo} are indexed, an attribute such as {@code FOO} is deliberately not used for SAI
+     * pruning because choosing either index could create false negatives.
+     */
+    @Nullable
+    private SaiIndex saiIndexForAttribute(@NotNull String attribute)
+    {
+        List<SaiIndex> indexes = saiIndexes();
+        for (SaiIndex candidate : indexes)
+        {
+            if (candidate.column().equals(attribute))
+            {
+                return candidate;
+            }
+        }
+
+        SaiIndex caseInsensitiveMatch = null;
+        for (SaiIndex candidate : indexes)
+        {
+            if (!candidate.column().equalsIgnoreCase(attribute))
+            {
+                continue;
+            }
+            if (caseInsensitiveMatch != null && !caseInsensitiveMatch.column().equals(candidate.column()))
+            {
+                return null;
+            }
+            caseInsensitiveMatch = candidate;
+        }
+        return caseInsensitiveMatch;
     }
 
     @Nullable

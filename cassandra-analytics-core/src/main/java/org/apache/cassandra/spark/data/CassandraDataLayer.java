@@ -139,6 +139,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
     protected boolean enableStats;
     protected boolean readIndexOffset;
     protected boolean useIncrementalRepair;
+    protected boolean saiFilteringEnabled;
+    protected int saiMaxCandidateTokens;
     protected List<SchemaFeature> requestedFeatures;
     protected Map<String, ReplicationFactor> rfMap;
     @Nullable
@@ -173,6 +175,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         this.enableStats = options.enableStats();
         this.readIndexOffset = options.readIndexOffset();
         this.useIncrementalRepair = options.useIncrementalRepair();
+        this.saiFilteringEnabled = options.saiFilteringEnabled();
+        this.saiMaxCandidateTokens = options.saiMaxCandidateTokens();
         this.lastModifiedTimestampField = options.lastModifiedTimestampField();
         this.requestedFeatures = options.requestedFeatures();
         this.sstableTimeRangeFilter = options.sstableTimeRangeFilter;
@@ -199,6 +203,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
                                  boolean enableStats,
                                  boolean readIndexOffset,
                                  boolean useIncrementalRepair,
+                                 boolean saiFilteringEnabled,
+                                 int saiMaxCandidateTokens,
                                  @Nullable String lastModifiedTimestampField,
                                  List<SchemaFeature> requestedFeatures,
                                  @NotNull Map<String, ReplicationFactor> rfMap,
@@ -222,6 +228,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         this.enableStats = enableStats;
         this.readIndexOffset = readIndexOffset;
         this.useIncrementalRepair = useIncrementalRepair;
+        this.saiFilteringEnabled = saiFilteringEnabled;
+        this.saiMaxCandidateTokens = saiMaxCandidateTokens;
         this.lastModifiedTimestampField = lastModifiedTimestampField;
         this.requestedFeatures = requestedFeatures;
         if (lastModifiedTimestampField != null)
@@ -529,6 +537,18 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
     }
 
     @Override
+    public boolean saiFilteringEnabled()
+    {
+        return saiFilteringEnabled;
+    }
+
+    @Override
+    public int saiMaxCandidateTokens()
+    {
+        return saiMaxCandidateTokens;
+    }
+
+    @Override
     public boolean readIndexOffset()
     {
         return readIndexOffset;
@@ -736,15 +756,15 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         // Map to SSTable
         List<SSTable> sstables = result.entrySet().stream()
                      .map(entry -> new SidecarProvisionedSSTable(sidecar,
-                                                                      sidecarClientConfig,
-                                                                      sidecarInstance,
-                                                                      maybeQuotedKeyspace,
-                                                                      maybeQuotedTable,
-                                                                      snapshotName,
-                                                                      entry.getValue(),
-                                                                      customComponents.getOrDefault(entry.getKey(), Collections.emptyMap()),
-                                                                      partitionId,
-                                                                      stats()))
+                                                                 sidecarClientConfig,
+                                                                 sidecarInstance,
+                                                                 maybeQuotedKeyspace,
+                                                                 maybeQuotedTable,
+                                                                 snapshotName,
+                                                                 entry.getValue(),
+                                                                 customComponents.getOrDefault(entry.getKey(), Collections.emptyMap()),
+                                                                 partitionId,
+                                                                 stats()))
                      .collect(Collectors.toList());
 
         // Validate SSTable versions against expected versions from gossip
@@ -871,6 +891,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         this.enableStats = in.readBoolean();
         this.readIndexOffset = in.readBoolean();
         this.useIncrementalRepair = in.readBoolean();
+        this.saiFilteringEnabled = in.readBoolean();
+        this.saiMaxCandidateTokens = in.readInt();
         this.lastModifiedTimestampField = readNullable(in);
         int features = in.readShort();
         List<SchemaFeature> requestedFeatures = new ArrayList<>(features);
@@ -925,6 +947,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         out.writeBoolean(this.enableStats);
         out.writeBoolean(this.readIndexOffset);
         out.writeBoolean(this.useIncrementalRepair);
+        out.writeBoolean(this.saiFilteringEnabled);
+        out.writeInt(this.saiMaxCandidateTokens);
         // If lastModifiedTimestampField exist, it aliases the LMT field
         writeNullable(out, this.lastModifiedTimestampField);
         // Write the list of requested features: first write the size, then write the feature names
@@ -1064,6 +1088,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             out.writeBoolean(dataLayer.enableStats);
             out.writeBoolean(dataLayer.readIndexOffset);
             out.writeBoolean(dataLayer.useIncrementalRepair);
+            out.writeBoolean(dataLayer.saiFilteringEnabled);
+            out.writeInt(dataLayer.saiMaxCandidateTokens);
             // If lastModifiedTimestampField exist, it aliases the LMT field
             out.writeString(dataLayer.lastModifiedTimestampField);
             // Write the list of requested features: first write the size, then write the feature names
@@ -1115,6 +1141,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             in.readBoolean(),
             in.readBoolean(),
             in.readBoolean(),
+            in.readBoolean(),
+            in.readInt(),
             in.readString(),
             kryo.readObject(in, SchemaFeaturesListWrapper.class).toList(),
             kryo.readObject(in, HashMap.class),

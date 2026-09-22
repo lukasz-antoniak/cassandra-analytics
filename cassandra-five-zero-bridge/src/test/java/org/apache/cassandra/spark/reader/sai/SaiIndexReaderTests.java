@@ -52,7 +52,7 @@ class SaiIndexReaderTests
         Optional<CandidateTokens> result = SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
                                                                               Collections.emptySet(),
                                                                               Collections.singletonList(null),
-                                                                              null);
+                                                                              null, 100);
 
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().isEmpty()).isTrue();
@@ -64,7 +64,7 @@ class SaiIndexReaderTests
         Optional<CandidateTokens> result = SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
                                                                               Collections.singleton(mock(SSTable.class)),
                                                                               Collections.emptyList(),
-                                                                              null);
+                                                                              null, 100);
 
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().isEmpty()).isTrue();
@@ -83,10 +83,14 @@ class SaiIndexReaderTests
                                                  primaryKey(candidates.get(1).partitionKey),
                                                  primaryKey(candidates.get(2).partitionKey));
 
-        CandidateTokens result =
-        SaiIndexReader.collectCandidateTokens(matches.iterator(), null, Murmur3Partitioner.instance);
+        CandidateTokens result = SaiIndexReader.collectCandidateTokens(matches.iterator(),
+                                                                       null,
+                                                                       Murmur3Partitioner.instance,
+                                                                       Integer.MAX_VALUE)
+                                               .orElse(null);
 
         assertThat(result.isEmpty()).isFalse();
+        assertThat(result.size()).isEqualTo(3);
         for (Candidate candidate : candidates)
         {
             assertThat(result.contains(candidate.token)).isTrue();
@@ -95,16 +99,48 @@ class SaiIndexReaderTests
     }
 
     @Test
+    void testCollectCandidateTokensFallsBackWhenUniqueCandidateLimitIsExceeded()
+    {
+        List<Candidate> candidates = sortedCandidates("one", "two", "three");
+
+        Optional<CandidateTokens> result = SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(),
+                                                                                 null,
+                                                                                 Murmur3Partitioner.instance,
+                                                                                 2);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void testCollectCandidateTokensDoesNotCountDuplicatePartitionTokensAgainstLimit()
+    {
+        List<Candidate> candidates = sortedCandidates("one", "two");
+        List<PrimaryKey> matches = Arrays.asList(primaryKey(candidates.get(0).partitionKey),
+                                                 primaryKey(candidates.get(0).partitionKey),
+                                                 primaryKey(candidates.get(1).partitionKey),
+                                                 primaryKey(candidates.get(1).partitionKey));
+
+        Optional<CandidateTokens> result = SaiIndexReader.collectCandidateTokens(matches.iterator(),
+                                                                                 null,
+                                                                                 Murmur3Partitioner.instance,
+                                                                                 2);
+
+        assertThat(result).isPresent();
+        assertThat(result.orElseThrow().size()).isEqualTo(2);
+    }
+
+    @Test
     void testCollectCandidateTokensAppliesSparkTokenRange()
     {
         List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five");
         Candidate firstIncluded = candidates.get(1);
         Candidate lastIncluded = candidates.get(3);
-        SparkRangeFilter sparkRangeFilter =
-        SparkRangeFilter.create(TokenRange.closed(firstIncluded.token, lastIncluded.token));
+        SparkRangeFilter sparkRangeFilter = SparkRangeFilter.create(TokenRange.closed(firstIncluded.token, lastIncluded.token));
 
-        CandidateTokens result =
-        SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter, Murmur3Partitioner.instance);
+        CandidateTokens result = SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(),
+                                                                       sparkRangeFilter, Murmur3Partitioner.instance,
+                                                                       Integer.MAX_VALUE)
+                                               .orElse(null);
 
         assertThat(result.contains(candidates.get(0).token)).isFalse();
         assertThat(result.contains(firstIncluded.token)).isTrue();
@@ -119,11 +155,11 @@ class SaiIndexReaderTests
     {
         List<Candidate> candidates = sortedCandidates("red", "green", "blue");
         BigInteger upper = candidates.get(0).token.subtract(BigInteger.ONE);
-        SparkRangeFilter sparkRangeFilter =
-        SparkRangeFilter.create(TokenRange.singleton(upper));
+        SparkRangeFilter sparkRangeFilter = SparkRangeFilter.create(TokenRange.singleton(upper));
 
-        CandidateTokens result =
-        SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter, Murmur3Partitioner.instance);
+        CandidateTokens result = SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter,
+                                                                       Murmur3Partitioner.instance, Integer.MAX_VALUE)
+                                               .orElse(null);
 
         assertThat(result.isEmpty()).isTrue();
     }
@@ -135,7 +171,8 @@ class SaiIndexReaderTests
         List<PrimaryKey> outOfOrder = Arrays.asList(primaryKey(candidates.get(1).partitionKey),
                                                     primaryKey(candidates.get(0).partitionKey));
 
-        assertThatThrownBy(() -> SaiIndexReader.collectCandidateTokens(outOfOrder.iterator(), null, Murmur3Partitioner.instance))
+        assertThatThrownBy(() -> SaiIndexReader.collectCandidateTokens(outOfOrder.iterator(), null,
+                                                                       Murmur3Partitioner.instance, Integer.MAX_VALUE))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("sorted order");
     }

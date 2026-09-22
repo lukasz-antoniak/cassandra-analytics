@@ -104,7 +104,8 @@ public final class SaiIndexReader
     public static Optional<CandidateTokens> findCandidateTokens(@NotNull TableMetadata metadata,
                                                                 @NotNull Set<SSTable> sstables,
                                                                 @NotNull List<SaiFilter> filters,
-                                                                @Nullable SparkRangeFilter sparkRangeFilter)
+                                                                @Nullable SparkRangeFilter sparkRangeFilter,
+                                                                int maxCandidateTokens)
     {
         if (sstables.isEmpty() || filters.isEmpty())
         {
@@ -134,14 +135,17 @@ public final class SaiIndexReader
             try (KeyRangeIterator finalMatches = executePlan(metadata, plan, sstableResources, queryContext))
             {
                 finalMatches.setOnClose(resources::close);
-                return Optional.of(collectCandidateTokens(finalMatches, sparkRangeFilter, metadata.partitioner));
+                return collectCandidateTokens(finalMatches,
+                                              sparkRangeFilter,
+                                              metadata.partitioner,
+                                              maxCandidateTokens);
             }
         }
-        catch (Throwable throwable)
+        catch (Exception exception)
         {
             resources.close();
             // No Data.db rows have been emitted yet, so every SAI failure can safely fail open to a normal scan.
-            LOGGER.warn("Unable to use SAI for SSTable pruning, falling back to normal SSTable scan", throwable);
+            LOGGER.warn("Unable to use SAI for SSTable pruning, falling back to normal SSTable scan", exception);
             return Optional.empty();
         }
     }
@@ -151,10 +155,12 @@ public final class SaiIndexReader
      * used by the Data.db read-planning phase.
      */
     @NotNull
-    static CandidateTokens collectCandidateTokens(@NotNull Iterator<PrimaryKey> matches,
-                                                  @Nullable SparkRangeFilter sparkRangeFilter,
-                                                  @NotNull IPartitioner partitioner)
+    static Optional<CandidateTokens> collectCandidateTokens(@NotNull Iterator<PrimaryKey> matches,
+                                                            @Nullable SparkRangeFilter sparkRangeFilter,
+                                                            @NotNull IPartitioner partitioner,
+                                                            int maxCandidateTokens)
     {
+        Preconditions.checkArgument(maxCandidateTokens >= 0, "maxCandidateTokens must be non-negative");
         CandidateTokens.Builder candidates = CandidateTokens.builder(partitioner);
         while (matches.hasNext())
         {
@@ -163,9 +169,17 @@ public final class SaiIndexReader
             if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
             {
                 candidates.add(token);
+                if (candidates.size() > maxCandidateTokens)
+                {
+                    LOGGER.info("SAI matched more than {} unique candidate partition tokens; " +
+                                "falling back to normal SSTable scan. Configure 'saiMaxCandidateTokens' " +
+                                "option to change the limit",
+                                maxCandidateTokens);
+                    return Optional.empty();
+                }
             }
         }
-        return candidates.build();
+        return Optional.of(candidates.build());
     }
 
     @NotNull

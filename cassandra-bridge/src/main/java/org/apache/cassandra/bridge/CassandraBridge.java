@@ -109,7 +109,8 @@ public abstract class CassandraBridge
                                                        boolean readIndexOffset,
                                                        boolean useIncrementalRepair,
                                                        @NotNull Stats stats,
-                                                       @NotNull List<SaiFilter> saiFilters)
+                                                       @NotNull List<SaiFilter> saiFilters,
+                                                       int saiMaxCandidateTokens)
     {
         return getCompactionScanner(table, partitionerType, ssTables, sparkRangeFilter, partitionKeyFilters,
                                     sstableTimeRangeFilter, columnFilter, timeProvider, readIndexOffset,

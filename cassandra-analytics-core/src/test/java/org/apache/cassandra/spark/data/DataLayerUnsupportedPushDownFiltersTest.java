@@ -246,6 +246,35 @@ public class DataLayerUnsupportedPushDownFiltersTest
     }
 
     @Test
+    public void testSaiFilterColumnMatchingCaseSensitiveIdentifiers()
+    {
+        runTest((partitioner, directory, bridge) -> {
+            TestSchema schema = TestSchema.basic(bridge);
+            List<Path> dataFiles = getFileType(directory, FileType.DATA).collect(Collectors.toList());
+            TestDataLayer dataLayer = new TestDataLayer(bridge, dataFiles, schema.buildTable())
+            {
+                @Override
+                public List<SaiIndex> saiIndexes()
+                {
+                    return ImmutableList.of(new SaiIndex("upper_idx", "Foo", "Foo", Collections.emptyMap()),
+                                            new SaiIndex("lower_idx", "foo", "foo", Collections.emptyMap()));
+                }
+            };
+
+            List<SaiFilter> exactUpper = dataLayer.saiFilters(new Filter[]{new EqualTo("Foo", 1)});
+            assertThat(exactUpper).hasSize(1);
+            assertThat(exactUpper.get(0).index().name()).isEqualTo("upper_idx");
+
+            List<SaiFilter> exactLower = dataLayer.saiFilters(new Filter[]{new EqualTo("foo", 1)});
+            assertThat(exactLower).hasSize(1);
+            assertThat(exactLower.get(0).index().name()).isEqualTo("lower_idx");
+
+            // Without an exact spelling, case-insensitive lookup is ambiguous. Do not prune with either index.
+            assertThat(dataLayer.saiFilters(new Filter[]{new EqualTo("FOO", 1)})).isEmpty();
+        });
+    }
+
+    @Test
     public void testSchemaWithCompositePartitionKey()
     {
         runTest((partitioner, directory, bridge) -> {

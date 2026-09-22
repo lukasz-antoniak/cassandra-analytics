@@ -240,6 +240,12 @@ public final class CandidateTokens
             }
         }
 
+
+        public int size()
+        {
+            return size;
+        }
+
         public void add(@NotNull BigInteger token)
         {
             if (murmur3)
