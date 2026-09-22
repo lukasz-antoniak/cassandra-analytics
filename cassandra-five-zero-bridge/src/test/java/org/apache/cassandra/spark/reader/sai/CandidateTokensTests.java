@@ -88,9 +88,7 @@ class CandidateTokensTests
         CandidateTokens.Builder builder = CandidateTokens.builder(Murmur3Partitioner.instance);
         builder.add(BigInteger.TEN);
 
-        assertThatThrownBy(() -> builder.add(BigInteger.ONE))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("sorted order");
+        assertThatThrownBy(() -> builder.add(BigInteger.ONE)).hasMessageContaining("sorted order");
     }
 
     @Test

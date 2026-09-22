@@ -197,8 +197,8 @@ public class BtiReaderUtils
                                             .build(null, false, false);
             try
             {
-                // BtiTableReader consumes Cassandra Range objects. Materialize them in bounded batches rather than
-                // retaining one Range (and two Token objects) for every SAI candidate. Returned physical ranges are
+                // BtiTableReader consumes Cassandra range objects. Materialize them in bounded batches rather than
+                // retaining one range (and two token objects) for every SAI candidate. Returned physical ranges are
                 // immediately coalesced, so peak allocation is independent of the total candidate count.
                 for (int batchStart = 0; batchStart < candidates.size(); batchStart += SAI_TOKEN_RANGE_BATCH_SIZE)
                 {

@@ -177,7 +177,7 @@ public abstract class CellIterator implements Iterator<Cell>, AutoCloseable
     {
         while (scanner.next())
         {
-            rowData = Objects.requireNonNull(scanner.data(), "StreamScanner.data() returned null after next() returned true");
+            rowData = Objects.requireNonNull(scanner.data());
 
             // If hasNext returns true, it indicates the partition keys has been loaded into the rid.
             // Therefore, let's try to rebuild partition.

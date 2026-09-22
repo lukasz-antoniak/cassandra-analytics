@@ -28,10 +28,10 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Serializable description of a Cassandra Storage Attached Index (SAI).
+ * Serializable description of a Cassandra Storage-Attached-Index (SAI).
  *
  * This intentionally contains only version-neutral metadata. Cassandra-version
- * specific bridge code converts it to native Cassandra index metadata.
+ * specific bridge code converts it to native index metadata ({@code StorageAttachedIndex}).
  */
 public final class SaiIndex implements Serializable
 {
@@ -93,10 +93,10 @@ public final class SaiIndex implements Serializable
             return false;
         }
         SaiIndex that = (SaiIndex) other;
-        return name.equals(that.name)
-               && column.equals(that.column)
-               && target.equals(that.target)
-               && options.equals(that.options);
+        return Objects.equals(name, that.name)
+               && Objects.equals(column, that.column)
+               && Objects.equals(target, that.target)
+               && Objects.equals(options, that.options);
     }
 
     @Override
@@ -108,11 +108,6 @@ public final class SaiIndex implements Serializable
     @Override
     public String toString()
     {
-        return "SaiIndex{" +
-               "name='" + name + '\'' +
-               ", column='" + column + '\'' +
-               ", target='" + target + '\'' +
-               ", options=" + options +
-               '}';
+        return "SaiIndex{name=" + name + ", column=" + column + ", target=" + target + ", options=" + options + "}";
     }
 }

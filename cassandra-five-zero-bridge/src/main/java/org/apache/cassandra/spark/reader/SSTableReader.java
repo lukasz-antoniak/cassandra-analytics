@@ -124,6 +124,7 @@ public class SSTableReader implements SparkSSTableReader, Scannable
     private final CandidateTokens candidateTokens;
     @Nullable
     private final CandidateTokens.Slice sstableCandidateTokens;
+    // Data.db ranges calculated based on candidate tokens and primary BIG / BTI index.
     @NotNull
     private List<DataDbRange> dataDbRanges = Collections.emptyList();
     @NotNull

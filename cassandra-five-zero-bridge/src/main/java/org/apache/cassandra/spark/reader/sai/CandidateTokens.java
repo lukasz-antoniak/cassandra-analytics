@@ -23,6 +23,7 @@ import java.util.Arrays;
 
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.spark.utils.Preconditions;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -192,10 +193,7 @@ public final class CandidateTokens
         @NotNull
         public BigInteger first()
         {
-            if (isEmpty())
-            {
-                throw new IllegalStateException("Candidate token slice is empty");
-            }
+            Preconditions.checkState(!isEmpty(), "Candidate token slice is empty");
             return owner.tokenAt(from);
         }
 
@@ -204,7 +202,7 @@ public final class CandidateTokens
         {
             if (index < 0 || index >= size())
             {
-                throw new IndexOutOfBoundsException("index=" + index + " size=" + size());
+                throw new IndexOutOfBoundsException();
             }
             return owner.tokenAt(from + index);
         }
@@ -214,7 +212,7 @@ public final class CandidateTokens
         {
             if (index < 0 || index >= size())
             {
-                throw new IndexOutOfBoundsException("index=" + index + " size=" + size());
+                throw new IndexOutOfBoundsException();
             }
             return owner.compareAt(from + index, token);
         }
@@ -254,10 +252,7 @@ public final class CandidateTokens
                 if (size > 0)
                 {
                     int comparison = Long.compare(value, murmur3Tokens[size - 1]);
-                    if (comparison < 0)
-                    {
-                        throw new IllegalArgumentException("SAI tokens must be supplied in sorted order");
-                    }
+                    Preconditions.checkState(comparison >= 0, "SAI tokens must be supplied in sorted order");
                     if (comparison == 0)
                     {
                         return;
@@ -271,10 +266,7 @@ public final class CandidateTokens
             if (size > 0)
             {
                 int comparison = token.compareTo(genericTokens[size - 1]);
-                if (comparison < 0)
-                {
-                    throw new IllegalArgumentException("SAI tokens must be supplied in sorted order");
-                }
+                Preconditions.checkState(comparison >= 0, "SAI tokens must be supplied in sorted order");
                 if (comparison == 0)
                 {
                     return;

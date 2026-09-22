@@ -26,11 +26,7 @@ import org.apache.cassandra.spark.data.SaiIndex;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Version-neutral SAI predicate used as an SSTable pruning hint.
- *
- * The Spark predicate is deliberately retained as an unsupported filter so Spark
- * evaluates it again after the SSTable read. SAI therefore narrows physical I/O
- * without becoming part of the correctness boundary.
+ * SAI predicate used as an SSTable pruning hint.
  */
 public final class SaiFilter implements Serializable
 {
@@ -89,9 +85,9 @@ public final class SaiFilter implements Serializable
             return false;
         }
         SaiFilter that = (SaiFilter) other;
-        return index.equals(that.index)
-               && operator == that.operator
-               && value.equals(that.value);
+        return Objects.equals(index, that.index)
+               && Objects.equals(operator, that.operator)
+               && Objects.equals(value, that.value);
     }
 
     @Override
@@ -103,6 +99,6 @@ public final class SaiFilter implements Serializable
     @Override
     public String toString()
     {
-        return "SaiFilter{" + "index=" + index + ", operator=" + operator + ", value='" + value + '\'' + '}';
+        return "SaiFilter{index=" + index + ", operator=" + operator + ", value=" + value + "}";
     }
 }

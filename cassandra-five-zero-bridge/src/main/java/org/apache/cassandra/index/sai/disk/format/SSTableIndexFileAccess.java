@@ -30,13 +30,15 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.Set;
 
+import com.google.common.base.Preconditions;
+
 import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.io.util.File;
 import org.apache.cassandra.io.util.FileHandle;
 import org.apache.cassandra.spark.data.SSTable;
 
 /**
- * Adapts an Analytics {@link SSTable}'s custom components to Cassandra SAI's
+ * Adapts an Analytics {@link SSTable} custom components to Cassandra SAI
  * {@link FileHandle}-based random-access API without creating local files.
  */
 public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
@@ -80,12 +82,11 @@ public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
                .withLengthOverride(length)
                .bufferSize(REMOTE_READ_BUFFER_SIZE)
                .complete(ignored -> new ChannelProxy(file,
-                                                      new SSTableFileChannel(sstable,
-                                                                             componentName,
-                                                                             length)));
+                                                     new SSTableFileChannel(sstable,
+                                                                            componentName,
+                                                                            length)));
     }
 
-    /** Read-only FileChannel used by Cassandra's SimpleChunkReader. */
     public static final class SSTableFileChannel extends FileChannel
     {
         private final SSTable sstable;
@@ -140,10 +141,7 @@ public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
         public int read(ByteBuffer destination, long absolutePosition) throws IOException
         {
             ensureOpen();
-            if (absolutePosition < 0)
-            {
-                throw new IllegalArgumentException("position must be non-negative");
-            }
+            Preconditions.checkState(absolutePosition >= 0, "position must be non-negative");
             if (!destination.hasRemaining())
             {
                 return 0;
@@ -265,8 +263,6 @@ public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
         @Override
         protected void implCloseChannel()
         {
-            // There is no persistent network resource. Each positional read owns its
-            // BufferingInputStream/Sidecar range request and closes it before returning.
         }
 
         private void ensureOpen() throws ClosedChannelException

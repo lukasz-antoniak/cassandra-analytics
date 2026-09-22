@@ -52,14 +52,6 @@ public class SparkRowIterator extends AbstractSparkRowIterator<GenericInternalRo
     public SparkRowIterator(int partitionId,
                             @NotNull DataLayer dataLayer,
                             @Nullable StructType requiredSchema,
-                            @NotNull List<PartitionKeyFilter> partitionKeyFilters)
-    {
-        this(partitionId, dataLayer, requiredSchema, partitionKeyFilters, java.util.Collections.emptyList());
-    }
-
-    public SparkRowIterator(int partitionId,
-                            @NotNull DataLayer dataLayer,
-                            @Nullable StructType requiredSchema,
                             @NotNull List<PartitionKeyFilter> partitionKeyFilters,
                             @NotNull List<SaiFilter> saiFilters)
     {

@@ -287,7 +287,8 @@ public class CassandraDataLayerValidationTest
                   Collections.emptyMap(),             // rfMap
                   mock(TimeProvider.class),           // timeProvider
                   null,                               // sstableTimeRangeFilter
-                  sstableVersions);                   // sstableVersionsOnCluster
+                  sstableVersions,                    // sstableVersionsOnCluster
+                  Collections.emptyList());           // saiFilters
             this.sstableVersionsOnCluster = sstableVersions;
         }
 

@@ -203,18 +203,17 @@ public class CassandraBridgeImplementation extends CassandraBridge
                     .collect(Collectors.toList());
     }
 
-    @Override
-    public StreamScanner<RowData> getCompactionScanner(@NotNull CqlTable table,
-                                                       @NotNull Partitioner partitioner,
-                                                       @NotNull SSTablesSupplier ssTables,
-                                                       @Nullable SparkRangeFilter sparkRangeFilter,
-                                                       @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
-                                                       @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
-                                                       @Nullable PruneColumnFilter columnFilter,
-                                                       @NotNull TimeProvider timeProvider,
-                                                       boolean readIndexOffset,
-                                                       boolean useIncrementalRepair,
-                                                       @NotNull Stats stats)
+    private StreamScanner<RowData> getCompactionScanner(@NotNull CqlTable table,
+                                                        @NotNull Partitioner partitioner,
+                                                        @NotNull SSTablesSupplier ssTables,
+                                                        @Nullable SparkRangeFilter sparkRangeFilter,
+                                                        @NotNull Collection<PartitionKeyFilter> partitionKeyFilters,
+                                                        @NotNull SSTableTimeRangeFilter sstableTimeRangeFilter,
+                                                        @Nullable PruneColumnFilter columnFilter,
+                                                        @NotNull TimeProvider timeProvider,
+                                                        boolean readIndexOffset,
+                                                        boolean useIncrementalRepair,
+                                                        @NotNull Stats stats)
     {
         // NOTE: Need to use SchemaBuilder to init keyspace if not already set in Cassandra Schema instance
         SchemaBuilder schemaBuilder = new SchemaBuilder(table, partitioner);
@@ -256,6 +255,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                         useIncrementalRepair, stats);
         }
 
+        // NOTE: Need to use SchemaBuilder to init keyspace if not already set in Cassandra Schema instance
         SchemaBuilder schemaBuilder = new SchemaBuilder(table, partitioner);
         TableMetadata metadata = schemaBuilder.tableMetaData();
 

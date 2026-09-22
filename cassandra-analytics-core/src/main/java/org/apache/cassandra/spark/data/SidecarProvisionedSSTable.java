@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -62,21 +61,6 @@ public class SidecarProvisionedSSTable extends SSTable
     private final Map<String, ListSnapshotFilesResponse.FileInfo> customComponents;
     private final int partitionId;
     private final Stats stats;
-
-    // CHECKSTYLE IGNORE: Constructor with many parameters
-    protected SidecarProvisionedSSTable(SidecarClient sidecar,
-                                        Sidecar.ClientConfig sidecarClientConfig,
-                                        SidecarInstance instance,
-                                        String keyspace,
-                                        String table,
-                                        String snapshotName,
-                                        @NotNull Map<FileType, ListSnapshotFilesResponse.FileInfo> components,
-                                        int partitionId,
-                                        Stats stats)
-    {
-        this(sidecar, sidecarClientConfig, instance, keyspace, table, snapshotName,
-             components, Collections.emptyMap(), partitionId, stats);
-    }
 
     // CHECKSTYLE IGNORE: Constructor with many parameters
     protected SidecarProvisionedSSTable(SidecarClient sidecar,
@@ -181,14 +165,12 @@ public class SidecarProvisionedSSTable extends SSTable
             return -1;
         }
 
-        int requested = (int) Math.min((long) destination.remaining(), snapshotFile.size - position);
+        int requested = (int) Math.min(destination.remaining(), snapshotFile.size - position);
         int originalLimit = destination.limit();
         destination.limit(destination.position() + requested);
-        // BufferingInputStream treats source.size() as an absolute end offset when it starts
-        // at a non-zero position, so bounding size here prevents range prefetch past this read.
         CassandraFileSource<SidecarProvisionedSSTable> source = source(snapshotFile,
-                                                                        FileType.INDEX,
-                                                                        position + requested);
+                                                                       FileType.INDEX,
+                                                                       position + requested);
         try (BufferingInputStream<SidecarProvisionedSSTable> input =
                  new BufferingInputStream<>(source, stats.bufferingInputStreamStats(), position))
         {
@@ -204,7 +186,7 @@ public class SidecarProvisionedSSTable extends SSTable
     public InputStream openCustomComponent(@NotNull String componentName)
     {
         ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
-        return snapshotFile == null ? null : open(snapshotFile, FileType.INDEX);
+        return snapshotFile == null ? null : open(snapshotFile, FileType.INDEX); // using INDEX file type for SAI indexes
     }
 
     @Override

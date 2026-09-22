@@ -83,7 +83,7 @@ final class IndexDbUtils
             Long matchedDataPosition = null;
 
             // Index.db and the SAI candidate set are both token sorted. Walk them together instead of creating a
-            // TokenRange object for every candidate. Keep a candidate selected while equal-token Index.db entries
+            // token range object for every candidate. Keep a candidate selected while equal-token Index.db entries
             // are observed so rare partitioner collisions cannot create false negatives.
             while (candidateIndex < candidates.size() || matchedDataPosition != null)
             {

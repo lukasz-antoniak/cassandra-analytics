@@ -80,9 +80,9 @@ import org.jetbrains.annotations.Nullable;
  * reconciled row may live in different SSTables. Applying conjunctions inside each SSTable could therefore create
  * false negatives.</p>
  *
- * <p>SAI is a read-planning phase only. The native iterator is fully consumed before Data.db scanning starts, then
- * all SAI resources are closed. The resulting exact tokens are shared by every participating SSTable so the normal
- * Cassandra compaction/reconciliation path can still apply newer values, TTLs and tombstones. Spark keeps the
+ * <p>SAI is a read-planning phase only. The native iterator is fully consumed before {@code Data.db} scanning starts,
+ * then all SAI resources are closed. The resulting exact tokens are shared by every participating SSTable so the normal
+ * Cassandra compaction / reconciliation path can still apply newer values, TTLs and tombstones. Spark keeps the
  * original predicates as residual filters, so stale index entries can only create false positives.</p>
  */
 public final class SaiIndexReader
@@ -314,8 +314,7 @@ public final class SaiIndexReader
             SSTableResources resources = null;
             try
             {
-                // Descriptor is still needed for Cassandra's SAI naming/ID logic, but this
-                // path is only an identifier. No file or directory is created or opened.
+                // Descriptor is still needed for  SAI naming / ID logic, but this path is only an identifier.
                 File dataFile = new File(".", sstable.getDataFileName());
                 Descriptor descriptor = Descriptor.fromFileWithComponent(dataFile, metadata.keyspace, metadata.name).left;
                 IndexDescriptor indexDescriptor = IndexDescriptor.create(descriptor, metadata.partitioner, metadata.comparator,
@@ -412,7 +411,7 @@ public final class SaiIndexReader
             catch (Exception exception)
             {
                 closeAll(segmentMatches);
-                throw new IOException("Unable to search SAI column: " + index.identifier(), exception);
+                throw new IOException("Unable to search SAI column " + index.identifier(), exception);
             }
         }
 

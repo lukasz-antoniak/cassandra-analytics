@@ -44,13 +44,6 @@ class CassandraPartitionReaderFactory implements PartitionReaderFactory
 
     CassandraPartitionReaderFactory(DataLayer dataLayer,
                                     StructType requiredSchema,
-                                    List<PartitionKeyFilter> partitionKeyFilters)
-    {
-        this(dataLayer, requiredSchema, partitionKeyFilters, java.util.Collections.emptyList());
-    }
-
-    CassandraPartitionReaderFactory(DataLayer dataLayer,
-                                    StructType requiredSchema,
                                     List<PartitionKeyFilter> partitionKeyFilters,
                                     List<SaiFilter> saiFilters)
     {

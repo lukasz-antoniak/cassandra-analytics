@@ -275,7 +275,7 @@ public final class CqlUtils
     }
 
     /**
-     * Extracts simple scalar Storage Attached Index definitions for the requested table.
+     * Extracts simple scalar Storage-Attached-Index definitions for the requested table.
      *
      * Collection targets such as {@code keys(m)} and {@code values(m)} are intentionally
      * ignored for now. The SSTable SAI pruning path currently supports scalar predicates only.
@@ -285,13 +285,12 @@ public final class CqlUtils
                                                    @NotNull String table)
     {
         String cleaned = cleanCql(schemaStr);
+
         String identifier = "(?:\\\"[^\\\"]+\\\"|[A-Za-z_][A-Za-z0-9_]*)";
-        Pattern pattern = Pattern.compile(
-        "CREATE\\s+(?:CUSTOM\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(" + identifier + ")\\s+"
-        + "ON\\s+\\\"?" + Pattern.quote(keyspace) + "\\\"?\\.\\\"?" + Pattern.quote(table) + "\\\"?\\s*"
-        + "\\(([^)]*)\\)\\s+USING\\s+'([^']+)'"
-        + "(?:\\s+WITH\\s+OPTIONS\\s*=\\s*(\\{[^}]*\\}))?\\s*;",
-        Pattern.CASE_INSENSITIVE);
+        Pattern pattern = Pattern.compile("CREATE\\s+(?:CUSTOM\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(" + identifier + ")\\s+"
+                                          + "ON\\s+\\\"?" + Pattern.quote(keyspace) + "\\\"?\\.\\\"?" + Pattern.quote(table) + "\\\"?\\s*"
+                                          + "\\(([^)]*)\\)\\s+USING\\s+'([^']+)'"
+                                          + "(?:\\s+WITH\\s+OPTIONS\\s*=\\s*(\\{[^}]*\\}))?\\s*;", Pattern.CASE_INSENSITIVE);
 
         Matcher matcher = pattern.matcher(cleaned);
         List<SaiIndex> indexes = new ArrayList<>();

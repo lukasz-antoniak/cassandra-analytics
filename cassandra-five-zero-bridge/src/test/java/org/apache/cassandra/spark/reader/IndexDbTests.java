@@ -51,6 +51,7 @@ import org.apache.cassandra.analytics.stats.Stats;
 import org.apache.cassandra.spark.utils.TemporaryDirectory;
 import org.apache.cassandra.spark.utils.test.TestSSTable;
 import org.apache.cassandra.spark.utils.test.TestSchema;
+import org.assertj.core.groups.Tuple;
 import org.jetbrains.annotations.NotNull;
 
 import static org.apache.cassandra.spark.TestUtils.BIG_FORMAT;
@@ -230,8 +231,8 @@ public class IndexDbTests
                                                                  Stats.DoNothingStats.INSTANCE);
 
         assertThat(ranges).extracting(DataDbRange::start, DataDbRange::end)
-                          .containsExactly(org.assertj.core.groups.Tuple.tuple(0L, 100_000L),
-                                           org.assertj.core.groups.Tuple.tuple(200_000L, 300_000L));
+                          .containsExactly(Tuple.tuple(0L, 100_000L),
+                                           Tuple.tuple(200_000L, 300_000L));
     }
 
     @Test

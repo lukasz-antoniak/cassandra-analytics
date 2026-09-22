@@ -146,7 +146,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
     @Nullable
     protected String lastModifiedTimestampField;
     protected Set<String> sstableVersionsOnCluster;
-    protected List<SaiIndex> saiIndexes = Collections.emptyList();
+    protected List<SaiIndex> saiIndexes;
     // volatile in order to publish the reference for visibility
     protected volatile CqlTable cqlTable;
     protected transient TimeProvider timeProvider;
@@ -210,7 +210,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
                                  @NotNull Map<String, ReplicationFactor> rfMap,
                                  TimeProvider timeProvider,
                                  SSTableTimeRangeFilter sstableTimeRangeFilter,
-                                 Set<String> sstableVersionsOnCluster)
+                                 Set<String> sstableVersionsOnCluster,
+                                 List<SaiIndex> saiIndexes)
     {
         super(consistencyLevel, datacenter);
         this.snapshotName = snapshotName;
@@ -240,6 +241,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         this.timeProvider = timeProvider;
         this.sstableTimeRangeFilter = sstableTimeRangeFilter;
         this.sstableVersionsOnCluster = sstableVersionsOnCluster;
+        this.saiIndexes = saiIndexes;
         this.maybeQuoteKeyspaceAndTable();
         this.initSidecarClient();
         this.initInstanceMap();
@@ -726,6 +728,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             // files so Sidecar exposes SAI components, but only base-table components belong in this SSTable set.
             if (fileName.indexOf('/') >= 0 || fileName.indexOf('\\') >= 0)
             {
+                LOGGER.debug("Skipping Secondary Index (2i) snapshot file: {}", fileName);
                 continue;
             }
             int lastIndexOfDash = fileName.lastIndexOf('-');
@@ -1111,7 +1114,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         {
             LOGGER.info("Deserializing CassandraDataLayer with Kryo");
 
-            CassandraDataLayer dataLayer = new CassandraDataLayer(
+            return new CassandraDataLayer(
             in.readString(),
             in.readString(),
             in.readBoolean(),
@@ -1148,9 +1151,8 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             kryo.readObject(in, HashMap.class),
             new ReaderTimeProvider(in.readLong()),
             kryo.readObject(in, SSTableTimeRangeFilter.class),
-            kryo.readObject(in, HashSet.class));
-            dataLayer.saiIndexes = kryo.readObject(in, ArrayList.class);
-            return dataLayer;
+            kryo.readObject(in, HashSet.class),
+            kryo.readObject(in, ArrayList.class));
         }
 
         // Wrapper only used internally for Kryo serialization/deserialization

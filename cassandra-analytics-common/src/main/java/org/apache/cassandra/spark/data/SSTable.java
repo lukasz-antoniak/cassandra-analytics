@@ -30,6 +30,7 @@ import java.util.Set;
 
 import com.google.common.base.Splitter;
 
+import org.apache.cassandra.spark.utils.Preconditions;
 import org.apache.cassandra.spark.utils.streaming.CassandraFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -123,20 +124,13 @@ public abstract class SSTable implements Serializable, CassandraFile
      * Reads a custom component at an absolute byte offset into {@code destination}.
      * Implementations that can perform native range reads should override this method.
      *
-     * <p>The method fills {@code destination} unless EOF is reached. This stronger
-     * contract is intentional: Cassandra's {@code SimpleChunkReader} performs a
-     * single positional {@code FileChannel.read()} for each chunk.</p>
-     *
      * @return number of bytes read, or {@code -1} when {@code position} is at EOF
      */
     public int readCustomComponent(@NotNull String componentName,
                                    long position,
                                    @NotNull ByteBuffer destination) throws IOException
     {
-        if (position < 0)
-        {
-            throw new IllegalArgumentException("position must be non-negative");
-        }
+        Preconditions.checkArgument(position >= 0, "position must be non-negative");
         if (!destination.hasRemaining())
         {
             return 0;

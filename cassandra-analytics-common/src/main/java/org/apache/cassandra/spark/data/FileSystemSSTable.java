@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,7 @@ public class FileSystemSSTable extends SSTable
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileSystemSSTable.class);
     private static final long serialVersionUID = -7545780596504602254L;
+    private static final Set<String> customComponentPrefixes = ImmutableSet.of("-SAI+");
 
     private final transient Path dataFilePath;
     private final transient boolean useBufferingInputStream;
@@ -106,13 +108,13 @@ public class FileSystemSSTable extends SSTable
             return Collections.emptySet();
         }
 
-        String prefix = sstablePrefix() + "-SAI+";
+        String prefix = sstablePrefix();
         try (Stream<Path> files = Files.list(parent))
         {
             return files.filter(Files::isRegularFile)
                         .map(Path::getFileName)
                         .map(Path::toString)
-                        .filter(name -> name.startsWith(prefix))
+                        .filter(this::isCustomComponentSupported)
                         .collect(Collectors.toSet());
         }
         catch (IOException exception)
@@ -126,7 +128,7 @@ public class FileSystemSSTable extends SSTable
     @Override
     public InputStream openCustomComponent(@NotNull String componentName)
     {
-        if (!isSaiComponentForThisSSTable(componentName))
+        if (!isCustomComponentSupported(componentName))
         {
             return null;
         }
@@ -145,7 +147,7 @@ public class FileSystemSSTable extends SSTable
     @Override
     public long customComponentLength(@NotNull String componentName)
     {
-        if (!isSaiComponentForThisSSTable(componentName))
+        if (!isCustomComponentSupported(componentName))
         {
             throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
         }
@@ -159,11 +161,17 @@ public class FileSystemSSTable extends SSTable
         }
     }
 
-    private boolean isSaiComponentForThisSSTable(String componentName)
+    private boolean isCustomComponentSupported(String componentName)
     {
-        return componentName.indexOf('/') < 0
-               && componentName.indexOf('\\') < 0
-               && componentName.startsWith(sstablePrefix() + "-SAI+");
+        String prefix = sstablePrefix();
+        for (String type : customComponentPrefixes)
+        {
+            if (componentName.startsWith(prefix + type))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String sstablePrefix()

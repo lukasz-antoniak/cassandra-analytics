@@ -243,7 +243,7 @@ public abstract class DataLayer implements Serializable
 
     public StreamScanner openCompactionScanner(int partitionId, List<PartitionKeyFilter> partitionKeyFilters, SSTableTimeRangeFilter sstableTimeRangeFilter)
     {
-        return openCompactionScanner(partitionId, partitionKeyFilters, sstableTimeRangeFilter, null);
+        return openCompactionScanner(partitionId, partitionKeyFilters, sstableTimeRangeFilter, null, Collections.emptyList());
     }
 
     /**
@@ -286,17 +286,6 @@ public abstract class DataLayer implements Serializable
 
     /**
      * @return CompactionScanner for iterating over one or more SSTables, compacting data and purging tombstones
-     */
-    public StreamScanner<RowData> openCompactionScanner(int partitionId,
-                                                        List<PartitionKeyFilter> partitionKeyFilters,
-                                                        SSTableTimeRangeFilter sstableTimeRangeFilter,
-                                                        @Nullable PruneColumnFilter columnFilter)
-    {
-        return openCompactionScanner(partitionId, partitionKeyFilters, sstableTimeRangeFilter, columnFilter, Collections.emptyList());
-    }
-
-    /**
-     * Opens a compaction scanner with optional SAI predicates used only for physical SSTable pruning.
      */
     public StreamScanner<RowData> openCompactionScanner(int partitionId,
                                                         List<PartitionKeyFilter> partitionKeyFilters,
@@ -380,7 +369,7 @@ public abstract class DataLayer implements Serializable
     }
 
     /**
-     * @return SAI definitions available for this table. Implementations without SAI metadata return an empty list.
+     * @return SAI definitions available for this table.
      */
     @NotNull
     public List<SaiIndex> saiIndexes()
@@ -392,7 +381,8 @@ public abstract class DataLayer implements Serializable
      * Extracts Spark predicates that can safely be used as SAI pruning hints.
      *
      * These predicates remain in {@link #unsupportedPushDownFilters(Filter[])} so Spark evaluates them after the
-     * Cassandra reader has reconciled all candidate partitions.
+     * Cassandra reader has reconciled all candidate partitions. SAI therefore narrows physical I/O without becoming
+     * part of the correctness boundary.
      */
     @NotNull
     public List<SaiFilter> saiFilters(@NotNull Filter[] filters)
@@ -453,14 +443,14 @@ public abstract class DataLayer implements Serializable
     }
 
     /**
-     * Resolves a Spark attribute to an indexed Cassandra column without allowing case-insensitive matching to pick
-     * an arbitrary column when quoted/case-sensitive identifiers differ only by case.
+     * Resolves a Spark attribute to an indexed Cassandra column.
      *
      * Exact spelling always wins. Case-insensitive matching is retained for the normal unquoted identifier path,
      * but only when all matching indexes refer to the same Cassandra column spelling. If, for example, both
      * {@code Foo} and {@code foo} are indexed, an attribute such as {@code FOO} is deliberately not used for SAI
      * pruning because choosing either index could create false negatives.
      */
+    // TODO(lantoniak): Check.
     @Nullable
     private SaiIndex saiIndexForAttribute(@NotNull String attribute)
     {

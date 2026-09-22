@@ -113,8 +113,8 @@ public class SaiQueryPlanner
             options.put(IndexTarget.TARGET_OPTION_NAME, saiIndex.target());
             options.put(IndexTarget.CUSTOM_INDEX_OPTION_NAME, StorageAttachedIndex.class.getName());
             IndexMetadata indexMetadata = IndexMetadata.fromSchemaMetadata(saiIndex.name(),
-                                                                          IndexMetadata.Kind.CUSTOM,
-                                                                          options);
+                                                                           IndexMetadata.Kind.CUSTOM,
+                                                                           options);
             return new StorageAttachedIndex(cfs, indexMetadata);
         });
     }
