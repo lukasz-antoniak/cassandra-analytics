@@ -173,7 +173,7 @@ class SaiIndexReaderTests
 
         assertThatThrownBy(() -> SaiIndexReader.collectCandidateTokens(outOfOrder.iterator(), null,
                                                                        Murmur3Partitioner.instance, Integer.MAX_VALUE))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("sorted order");
     }
 

@@ -116,7 +116,7 @@ class SSTableIndexFileAccessTests
             assertThat(Arrays.copyOf(destination.array(), 2)).containsExactly((byte) 8, (byte) 9);
             assertThat(channel.read(ByteBuffer.allocate(1), data.length)).isEqualTo(-1);
             assertThatThrownBy(() -> channel.read(ByteBuffer.allocate(1), -1))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(IllegalStateException.class);
         }
     }
 

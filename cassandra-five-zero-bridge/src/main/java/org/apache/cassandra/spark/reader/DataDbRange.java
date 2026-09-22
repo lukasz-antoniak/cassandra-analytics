@@ -32,7 +32,7 @@ public final class DataDbRange
      * Coalesce token ranges with limited gap between them to ease memory pressure.
      * Exact candidate-token filtering still happens while Data.db is scanned, so this only affects I/O volume.
      */
-    public static final long DEFAULT_MAX_COALESCE_GAP_BYTES = 512 * 1024L;
+    public static final int DEFAULT_MAX_COALESCE_GAP_BYTES = 64 * 1024;
 
     private final long start;
     private final long end;
