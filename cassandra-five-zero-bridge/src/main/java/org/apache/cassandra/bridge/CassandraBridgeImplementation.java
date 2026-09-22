@@ -273,7 +273,7 @@ public class CassandraBridgeImplementation extends CassandraBridge
                                                                                             sparkRangeFilter);
         if (candidates.isEmpty())
         {
-            // SAI could not produce a safe candidate token set, use the standard full-table scan.
+            // No candidate token ranges selected form SAI filter, use standard full-table scan.
             return openCompactionScanner(metadata, partitioner, timeProvider, references, sparkRangeFilter,
                                          Collections.emptyList(), null, sstableTimeRangeFilter, columnFilter,
                                          readIndexOffset, useIncrementalRepair, stats);

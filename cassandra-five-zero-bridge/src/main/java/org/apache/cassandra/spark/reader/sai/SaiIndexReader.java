@@ -102,9 +102,9 @@ public final class SaiIndexReader
      */
     @NotNull
     public static Optional<CandidateTokens> findCandidateTokens(@NotNull TableMetadata metadata,
-                                                                  @NotNull Set<SSTable> sstables,
-                                                                  @NotNull List<SaiFilter> filters,
-                                                                  @Nullable SparkRangeFilter sparkRangeFilter)
+                                                                @NotNull Set<SSTable> sstables,
+                                                                @NotNull List<SaiFilter> filters,
+                                                                @Nullable SparkRangeFilter sparkRangeFilter)
     {
         if (sstables.isEmpty() || filters.isEmpty())
         {
@@ -149,10 +149,6 @@ public final class SaiIndexReader
     /**
      * Fully consumes the sorted native SAI result stream and converts it to the exact token-set representation
      * used by the Data.db read-planning phase.
-     *
-     * <p>This method deliberately accepts an {@link Iterator} rather than a {@link KeyRangeIterator};
-     * resource ownership remains with {@link #findCandidateTokens(TableMetadata, Set, List, SparkRangeFilter)}.
-     * Keeping the conversion separate also makes the one-pass materialization semantics directly testable.</p>
      */
     @NotNull
     static CandidateTokens collectCandidateTokens(@NotNull Iterator<PrimaryKey> matches,

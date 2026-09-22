@@ -49,11 +49,10 @@ class SaiIndexReaderTests
     @Test
     void testNoSSTablesProducesSuccessfulEmptyReadPlan()
     {
-        Optional<CandidateTokens> result =
-        SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
-                                                Collections.emptySet(),
-                                                Collections.singletonList(null),
-                                                null);
+        Optional<CandidateTokens> result = SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
+                                                                              Collections.emptySet(),
+                                                                              Collections.singletonList(null),
+                                                                              null);
 
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().isEmpty()).isTrue();
@@ -62,11 +61,10 @@ class SaiIndexReaderTests
     @Test
     void testNoFiltersProducesSuccessfulEmptyReadPlan()
     {
-        Optional<CandidateTokens> result =
-        SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
-                                                Collections.singleton(mock(SSTable.class)),
-                                                Collections.emptyList(),
-                                                null);
+        Optional<CandidateTokens> result = SaiIndexReader.findCandidateTokens(mock(TableMetadata.class),
+                                                                              Collections.singleton(mock(SSTable.class)),
+                                                                              Collections.emptyList(),
+                                                                              null);
 
         assertThat(result).isPresent();
         assertThat(result.orElseThrow().isEmpty()).isTrue();

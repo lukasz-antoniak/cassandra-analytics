@@ -35,6 +35,7 @@ import org.apache.cassandra.clients.SidecarStreamConsumerAdapter;
 import o.a.c.sidecar.client.shaded.client.SidecarClient;
 import o.a.c.sidecar.client.shaded.client.SidecarInstance;
 import org.apache.cassandra.analytics.stats.Stats;
+import org.apache.cassandra.spark.utils.Preconditions;
 import org.apache.cassandra.spark.utils.streaming.BufferingInputStream;
 import org.apache.cassandra.spark.utils.streaming.CassandraFileSource;
 import org.apache.cassandra.spark.utils.streaming.StreamConsumer;
@@ -168,10 +169,7 @@ public class SidecarProvisionedSSTable extends SSTable
                                    long position,
                                    @NotNull ByteBuffer destination) throws IOException
     {
-        if (position < 0)
-        {
-            throw new IllegalArgumentException("position must be non-negative");
-        }
+        Preconditions.checkArgument(position >= 0, "position must be non-negative");
         if (!destination.hasRemaining())
         {
             return 0;
@@ -213,10 +211,7 @@ public class SidecarProvisionedSSTable extends SSTable
     public long customComponentLength(@NotNull String componentName)
     {
         ListSnapshotFilesResponse.FileInfo snapshotFile = customComponents.get(componentName);
-        if (snapshotFile == null)
-        {
-            throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
-        }
+        Preconditions.checkArgument(snapshotFile != null, "Unknown SSTable component: " + componentName);
         return snapshotFile.size;
     }
 

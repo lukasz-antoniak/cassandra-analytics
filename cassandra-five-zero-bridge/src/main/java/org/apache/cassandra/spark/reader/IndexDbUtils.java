@@ -78,8 +78,7 @@ final class IndexDbUtils
             DataInputStream in = new DataInputStream(is);
             ByteBufferUtils.skipFully(in, searchStartOffset);
 
-            DataDbRange.Accumulator result =
-            new DataDbRange.Accumulator(DataDbRange.DEFAULT_MAX_COALESCE_GAP_BYTES);
+            DataDbRange.Accumulator result = new DataDbRange.Accumulator(DataDbRange.DEFAULT_MAX_COALESCE_GAP_BYTES);
             int candidateIndex = 0;
             Long matchedDataPosition = null;
 
