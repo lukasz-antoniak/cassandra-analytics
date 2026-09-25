@@ -24,9 +24,15 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import com.google.common.collect.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +47,7 @@ public class FileSystemSSTable extends SSTable
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileSystemSSTable.class);
     private static final long serialVersionUID = -7545780596504602254L;
+    private static final Set<String> customComponentPrefixes = ImmutableSet.of("-SAI+");
 
     private final transient Path dataFilePath;
     private final transient boolean useBufferingInputStream;
@@ -89,6 +96,89 @@ public class FileSystemSSTable extends SSTable
     public boolean isMissing(FileType fileType)
     {
         return resolveComponentFile(fileType) == null;
+    }
+
+    @NotNull
+    @Override
+    public Set<String> customComponentNames()
+    {
+        Path parent = dataFilePath.getParent();
+        if (parent == null)
+        {
+            return Collections.emptySet();
+        }
+
+        String prefix = sstablePrefix();
+        try (Stream<Path> files = Files.list(parent))
+        {
+            return files.filter(Files::isRegularFile)
+                        .map(Path::getFileName)
+                        .map(Path::toString)
+                        .filter(this::isCustomComponentSupported)
+                        .collect(Collectors.toSet());
+        }
+        catch (IOException exception)
+        {
+            LOGGER.warn("Unable to list custom SSTable components for {}", dataFilePath, exception);
+            return Collections.emptySet();
+        }
+    }
+
+    @Nullable
+    @Override
+    public InputStream openCustomComponent(@NotNull String componentName)
+    {
+        if (!isCustomComponentSupported(componentName))
+        {
+            return null;
+        }
+
+        Path component = dataFilePath.resolveSibling(componentName);
+        try
+        {
+            return new BufferedInputStream(new FileInputStream(component.toFile()));
+        }
+        catch (FileNotFoundException exception)
+        {
+            return null;
+        }
+    }
+
+    @Override
+    public long customComponentLength(@NotNull String componentName)
+    {
+        if (!isCustomComponentSupported(componentName))
+        {
+            throw new IllegalArgumentException("Unknown SSTable component: " + componentName);
+        }
+        try
+        {
+            return Files.size(dataFilePath.resolveSibling(componentName));
+        }
+        catch (IOException exception)
+        {
+            throw new RuntimeException(exception);
+        }
+    }
+
+    private boolean isCustomComponentSupported(String componentName)
+    {
+        String prefix = sstablePrefix();
+        for (String type : customComponentPrefixes)
+        {
+            if (componentName.startsWith(prefix + type))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String sstablePrefix()
+    {
+        String dataFileName = getDataFileName();
+        int separator = dataFileName.lastIndexOf('-');
+        return separator >= 0 ? dataFileName.substring(0, separator) : dataFileName;
     }
 
     @Nullable
