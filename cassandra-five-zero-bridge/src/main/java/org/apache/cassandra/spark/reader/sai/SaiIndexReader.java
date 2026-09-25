@@ -34,6 +34,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.cassandra.bridge.TokenRange;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.db.Keyspace;
@@ -42,6 +44,7 @@ import org.apache.cassandra.db.PartitionRangeReadCommand;
 import org.apache.cassandra.db.filter.RowFilter;
 import org.apache.cassandra.dht.Bounds;
 import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.index.sai.QueryContext;
 import org.apache.cassandra.index.sai.StorageAttachedIndex;
 import org.apache.cassandra.index.sai.disk.PrimaryKeyMap;
@@ -132,9 +135,17 @@ public final class SaiIndexReader
             }
 
             QueryContext queryContext = new QueryContext(null, Long.MAX_VALUE);
-            try (KeyRangeIterator finalMatches = executePlan(metadata, plan, sstableResources, queryContext))
+            try (KeyRangeIterator finalMatches = executePlan(metadata,
+                                                             plan,
+                                                             sstableResources,
+                                                             queryContext,
+                                                             sparkRangeFilter))
             {
                 finalMatches.setOnClose(resources::close);
+                seekToSparkRangeStart(finalMatches,
+                                      sparkRangeFilter,
+                                      metadata.partitioner,
+                                      metadata.comparator);
                 return collectCandidateTokens(finalMatches,
                                               sparkRangeFilter,
                                               metadata.partitioner,
@@ -161,11 +172,20 @@ public final class SaiIndexReader
                                                             int maxCandidateTokens)
     {
         Preconditions.checkArgument(maxCandidateTokens >= 0, "maxCandidateTokens must be non-negative");
+        BigInteger upperToken = sparkRangeFilter == null
+                                ? null
+                                : sparkRangeFilter.tokenRange().upperEndpoint();
         CandidateTokens.Builder candidates = CandidateTokens.builder(partitioner);
         while (matches.hasNext())
         {
             DecoratedKey partitionKey = matches.next().partitionKey();
             BigInteger token = TokenUtils.tokenToBigInteger(partitionKey.getToken());
+            // SAI iterators are sorted by primary key/token. Once the worker's upper
+            // token is crossed there cannot be another candidate belonging to this task.
+            if (upperToken != null && token.compareTo(upperToken) > 0)
+            {
+                break;
+            }
             if (sparkRangeFilter == null || !sparkRangeFilter.skipPartition(token))
             {
                 candidates.add(token);
@@ -182,13 +202,50 @@ public final class SaiIndexReader
         return Optional.of(candidates.build());
     }
 
+    /**
+     * Positions the SAI iterator at the beginning of the token range assigned to this Spark task.
+     */
+    static void seekToSparkRangeStart(@NotNull KeyRangeIterator matches,
+                                      @Nullable SparkRangeFilter sparkRangeFilter,
+                                      @NotNull IPartitioner partitioner,
+                                      @NotNull ClusteringComparator comparator)
+    {
+        if (sparkRangeFilter == null)
+        {
+            return;
+        }
+
+        // The worker range is open on the left ((lower, upper]). Seeking to 'lower' is intentional:
+        // SAI's token-only primary key gives us an efficient lower-bound seek, while the existing range check in
+        // collectCandidateTokens(Iterator, SparkRangeFilter, IPartitioner, int) still rejects any partition
+        // whose token is exactly equal to the open lower bound.
+        BigInteger lowerEndpoint = sparkRangeFilter.tokenRange().lowerEndpoint();
+        Token lowerToken = partitioner.getTokenFactory().fromString(lowerEndpoint.toString());
+        matches.skipTo(new PrimaryKey.Factory(partitioner, comparator).create(lowerToken));
+    }
+
+    static boolean overlapsSparkRange(@NotNull PrimaryKey minimumKey,
+                                      @NotNull PrimaryKey maximumKey,
+                                      @Nullable SparkRangeFilter sparkRangeFilter)
+    {
+        if (sparkRangeFilter == null)
+        {
+            return true;
+        }
+
+        BigInteger minimumToken = TokenUtils.tokenToBigInteger(minimumKey.token());
+        BigInteger maximumToken = TokenUtils.tokenToBigInteger(maximumKey.token());
+        return sparkRangeFilter.overlaps(TokenRange.closed(minimumToken, maximumToken));
+    }
+
     @NotNull
     private static KeyRangeIterator executePlan(@NotNull TableMetadata metadata,
                                                 @NotNull SaiQueryPlanner.Plan plan,
                                                 @NotNull List<SSTableResources> sstableResources,
-                                                @NotNull QueryContext queryContext)
+                                                @NotNull QueryContext queryContext,
+                                                @Nullable SparkRangeFilter sparkRangeFilter)
     {
-        QueryController controller = new AnalyticsQueryController(metadata, plan, sstableResources, queryContext);
+        QueryController controller = new AnalyticsQueryController(metadata, plan, sstableResources, queryContext, sparkRangeFilter);
         // Cassandra's Operation planner owns expression analysis, same-column range folding, and intersection.
         return SaiPlanAccessor.buildIterator(controller);
     }
@@ -205,11 +262,13 @@ public final class SaiIndexReader
         private final SaiQueryPlanner.Plan plan;
         private final List<SSTableResources> sstableResources;
         private final QueryContext queryContext;
+        private final SparkRangeFilter sparkRangeFilter;
 
         private AnalyticsQueryController(@NotNull TableMetadata metadata,
                                          @NotNull SaiQueryPlanner.Plan plan,
                                          @NotNull List<SSTableResources> sstableResources,
-                                         @NotNull QueryContext queryContext)
+                                         @NotNull QueryContext queryContext,
+                                         @Nullable SparkRangeFilter sparkRangeFilter)
         {
             super(columnFamilyStore(metadata),
                   PartitionRangeReadCommand.allDataRead(metadata, 0L),
@@ -218,6 +277,7 @@ public final class SaiIndexReader
             this.plan = plan;
             this.sstableResources = sstableResources;
             this.queryContext = queryContext;
+            this.sparkRangeFilter = sparkRangeFilter;
         }
 
         @Nullable
@@ -263,7 +323,7 @@ public final class SaiIndexReader
             {
                 for (SSTableResources resource : sstableResources)
                 {
-                    perSSTableMatches.add(resource.search(expression, queryContext));
+                    perSSTableMatches.add(resource.search(expression, queryContext, sparkRangeFilter));
                 }
                 // A logical row may be assembled from values written in different SSTables. Always UNION one
                 // planned expression across SSTables before intersecting different expressions.
@@ -387,7 +447,9 @@ public final class SaiIndexReader
         }
 
         @NotNull
-        KeyRangeIterator search(@NotNull Expression expression, @NotNull QueryContext queryContext) throws IOException
+        KeyRangeIterator search(@NotNull Expression expression,
+                                @NotNull QueryContext queryContext,
+                                @Nullable SparkRangeFilter sparkRangeFilter) throws IOException
         {
             Preconditions.checkState(!expression.isNotIndexed(), "SAI planner produced an unindexed expression: " + expression);
             StorageAttachedIndex index = expression.getIndex();
@@ -402,6 +464,12 @@ public final class SaiIndexReader
             {
                 for (OpenSegment segment : column.segments)
                 {
+                    // Segment metadata is ordered by primary key. Avoid opening/searching a segment
+                    // whose complete token span is outside the token range assigned to this Spark worker.
+                    if (!overlapsSparkRange(segment.metadata.minKey, segment.metadata.maxKey, sparkRangeFilter))
+                    {
+                        continue;
+                    }
                     Bounds<PartitionPosition> keyRange = new Bounds<>(segment.metadata.minKey.partitionKey(),
                                                                       segment.metadata.maxKey.partitionKey());
                     segmentMatches.add(segment.searcher.search(expression, keyRange, queryContext));

@@ -107,14 +107,13 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
 
     static Stream<Arguments> queryInputs()
     {
-        // TODO(lantoniak): Review percentages again.
         return Stream.of(
-        Arguments.of("eq", "score = " + MATCHING_SCORE, 2, 0.33),
-        Arguments.of("gt", "score > 250", 8, 0.7),
-        Arguments.of("between", "score > 250 AND score < 300", 5, 0.4),
+        Arguments.of("eq", "score = " + MATCHING_SCORE, 2, 0.08),
+        Arguments.of("gt", "score > 250", 8, 0.2),
+        Arguments.of("between", "score > 250 AND score < 300", 5, 0.1),
         Arguments.of("or", "score <= 2 OR score > 300", 3 + 3, 1), // OR expressions do not use SAI index
-        Arguments.of("multi_column", "score = 778 AND state = 'changed'", 1, 0.1),
-        Arguments.of("overridden", "score = 777 AND state = 'change-score'", 0, 0.1) // not most recent value
+        Arguments.of("multi_column", "score = 778 AND state = 'changed'", 1, 0.05),
+        Arguments.of("overridden", "score = 777 AND state = 'change-score'", 0, 0.05) // not most recent value
         );
     }
 

@@ -25,14 +25,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
 import org.apache.cassandra.bridge.TokenRange;
+import org.apache.cassandra.db.ClusteringComparator;
 import org.apache.cassandra.db.DecoratedKey;
 import org.apache.cassandra.dht.Murmur3Partitioner;
+import org.apache.cassandra.index.sai.iterators.KeyRangeIterator;
 import org.apache.cassandra.index.sai.utils.PrimaryKey;
 import org.apache.cassandra.schema.TableMetadata;
 import org.apache.cassandra.spark.data.SSTable;
@@ -129,6 +132,67 @@ class SaiIndexReaderTests
         assertThat(result.orElseThrow().size()).isEqualTo(2);
     }
 
+
+    @Test
+    void testCollectCandidateTokensStopsAfterSparkTokenRange()
+    {
+        List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five", "six");
+        Candidate firstIncluded = candidates.get(1);
+        Candidate lastIncluded = candidates.get(2);
+        SparkRangeFilter sparkRangeFilter = SparkRangeFilter.create(TokenRange.closed(firstIncluded.token, lastIncluded.token));
+        CountingIterator matches = new CountingIterator(primaryKeys(candidates));
+
+        Optional<CandidateTokens> result = SaiIndexReader.collectCandidateTokens(matches,
+                                                                                 sparkRangeFilter,
+                                                                                 Murmur3Partitioner.instance,
+                                                                                 Integer.MAX_VALUE);
+
+        assertThat(result).isPresent();
+        assertThat(result.orElseThrow().size()).isEqualTo(2);
+        // The iterator consumes the first key above the upper bound to discover that the
+        // range has ended, but must not scan the remaining SAI matches.
+        assertThat(matches.consumed()).isEqualTo(4);
+    }
+
+    @Test
+    void testSeekToSparkRangeStartSkipsEarlierSaiMatches()
+    {
+        List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five");
+        List<PrimaryKey> keys = realPrimaryKeys(candidates);
+        Candidate firstIncluded = candidates.get(2);
+        Candidate lastIncluded = candidates.get(4);
+        SparkRangeFilter sparkRangeFilter = SparkRangeFilter.create(TokenRange.openClosed(firstIncluded.token.subtract(BigInteger.ONE),
+                                                                                          lastIncluded.token));
+        ClusteringComparator comparator = new ClusteringComparator();
+        TrackingKeyRangeIterator matches = new TrackingKeyRangeIterator(keys);
+
+        SaiIndexReader.seekToSparkRangeStart(matches,
+                                             sparkRangeFilter,
+                                             Murmur3Partitioner.instance,
+                                             comparator);
+
+        assertThat(matches.skipCalls()).isEqualTo(1);
+        assertThat(TokenUtils.tokenToBigInteger(matches.next().token())).isEqualTo(firstIncluded.token);
+    }
+
+    @Test
+    void testSaiSegmentRangeIsPrunedUsingSparkTokenRange()
+    {
+        List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five");
+        List<PrimaryKey> keys = realPrimaryKeys(candidates);
+        SparkRangeFilter sparkRangeFilter = SparkRangeFilter.create(
+        TokenRange.closed(candidates.get(1).token, candidates.get(3).token));
+
+        assertThat(SaiIndexReader.overlapsSparkRange(keys.get(0), keys.get(0), sparkRangeFilter))
+                   .isFalse();
+        assertThat(SaiIndexReader.overlapsSparkRange(keys.get(1), keys.get(2), sparkRangeFilter))
+                   .isTrue();
+        assertThat(SaiIndexReader.overlapsSparkRange(keys.get(4), keys.get(4), sparkRangeFilter))
+                   .isFalse();
+        assertThat(SaiIndexReader.overlapsSparkRange(keys.get(0), keys.get(4), sparkRangeFilter))
+                   .isTrue();
+    }
+
     @Test
     void testCollectCandidateTokensAppliesSparkTokenRange()
     {
@@ -206,6 +270,85 @@ class SaiIndexReaderTests
         PrimaryKey primaryKey = mock(PrimaryKey.class);
         when(primaryKey.partitionKey()).thenReturn(partitionKey);
         return primaryKey;
+    }
+
+    private static List<PrimaryKey> realPrimaryKeys(List<Candidate> candidates)
+    {
+        PrimaryKey.Factory factory = new PrimaryKey.Factory(Murmur3Partitioner.instance, new ClusteringComparator());
+        List<PrimaryKey> keys = new ArrayList<>(candidates.size());
+        for (Candidate candidate : candidates)
+        {
+            keys.add(factory.create(candidate.partitionKey));
+        }
+        return keys;
+    }
+
+    private static final class CountingIterator implements Iterator<PrimaryKey>
+    {
+        private final Iterator<PrimaryKey> delegate;
+        private int consumed;
+
+        private CountingIterator(List<PrimaryKey> keys)
+        {
+            delegate = keys.iterator();
+        }
+
+        @Override
+        public boolean hasNext()
+        {
+            return delegate.hasNext();
+        }
+
+        @Override
+        public PrimaryKey next()
+        {
+            consumed++;
+            return delegate.next();
+        }
+
+        private int consumed()
+        {
+            return consumed;
+        }
+    }
+
+    private static final class TrackingKeyRangeIterator extends KeyRangeIterator
+    {
+        private final List<PrimaryKey> keys;
+        private int index;
+        private int skipCalls;
+
+        private TrackingKeyRangeIterator(List<PrimaryKey> keys)
+        {
+            super(keys.get(0), keys.get(keys.size() - 1), keys.size());
+            this.keys = keys;
+        }
+
+        @Override
+        protected PrimaryKey computeNext()
+        {
+            return index < keys.size() ? keys.get(index++) : endOfData();
+        }
+
+        @Override
+        protected void performSkipTo(PrimaryKey nextKey)
+        {
+            skipCalls++;
+            while (index < keys.size() && keys.get(index).compareTo(nextKey, false) < 0)
+            {
+                index++;
+            }
+        }
+
+        @Override
+        public void close()
+        {
+        }
+
+        private int skipCalls()
+        {
+            return skipCalls;
+        }
     }
 
     private static final class Candidate

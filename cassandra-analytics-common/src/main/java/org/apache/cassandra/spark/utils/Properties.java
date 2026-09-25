@@ -53,7 +53,7 @@ public final class Properties
     // According to https://github.com/apache/cassandra/blob/trunk/src/java/org/apache/cassandra/io/sstable/format/bti/BtiFormat.md#partition-index
     // BTI partition and row index page size equals 4096 bytes.
     public static final Map<FileType, Long> DEFAULT_CHUNK_BUFFER_OVERRIDE = Map.ofEntries(
-    entry(FileType.INDEX,            128 * KIBI_BYTES), // TODO(lantoniak): SAI uses this property? Increased from 32Kb.
+    entry(FileType.INDEX,             32 * KIBI_BYTES),
     entry(FileType.SUMMARY,          128 * KIBI_BYTES),
     entry(FileType.STATISTICS,        64 * KIBI_BYTES),
     entry(FileType.COMPRESSION_INFO,  64 * KIBI_BYTES),
