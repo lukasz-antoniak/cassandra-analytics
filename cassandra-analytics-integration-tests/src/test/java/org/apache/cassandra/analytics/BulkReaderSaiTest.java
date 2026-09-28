@@ -51,7 +51,6 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
 import static org.apache.cassandra.testing.TestUtils.uniqueTestTableFullName;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
 {
