@@ -194,8 +194,8 @@ public class DataLayerUnsupportedPushDownFiltersTest
                 @Override
                 public List<SaiIndex> saiIndexes()
                 {
-                    return ImmutableList.of(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
-                                            new SaiIndex("d_idx", "d", "d", Collections.emptyMap()));
+                    return ImmutableList.of(new SaiIndex("c_idx", "c", false, Collections.emptyMap()),
+                                            new SaiIndex("d_idx", "d", false, Collections.emptyMap()));
                 }
             };
 
@@ -228,18 +228,18 @@ public class DataLayerUnsupportedPushDownFiltersTest
             // An unsupported OR subtree does not prevent an independent AND conjunct from being used safely.
             List<SaiFilter> nestedBoolean = dataLayer.saiFilters(new Filter[]{new And(new Or(equality, otherColumn),
                                                                                       lowerBound)});
-            assertThat(nestedBoolean).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
+            assertThat(nestedBoolean).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", false, Collections.emptyMap()),
                                                                     SaiFilter.Operator.GT,
                                                                     "10"));
 
             List<SaiFilter> partialOr = dataLayer.saiFilters(new Filter[]{new Or(equality,
-                                                                                new StringContains("not_indexed", "x"))});
+                                                                                 new StringContains("not_indexed", "x"))});
             assertThat(partialOr).isEmpty();
 
             // A partial AND may still use the SAI-capable branch as a conservative pruning hint.
             List<SaiFilter> partialAnd = dataLayer.saiFilters(new Filter[]{new And(equality,
-                                                                                  new StringContains("not_indexed", "x"))});
-            assertThat(partialAnd).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", "c", Collections.emptyMap()),
+                                                                                   new StringContains("not_indexed", "x"))});
+            assertThat(partialAnd).containsExactly(new SaiFilter(new SaiIndex("c_idx", "c", false, Collections.emptyMap()),
                                                                  SaiFilter.Operator.EQ,
                                                                  "25"));
         });
@@ -256,8 +256,8 @@ public class DataLayerUnsupportedPushDownFiltersTest
                 @Override
                 public List<SaiIndex> saiIndexes()
                 {
-                    return ImmutableList.of(new SaiIndex("upper_idx", "Foo", "Foo", Collections.emptyMap()),
-                                            new SaiIndex("lower_idx", "foo", "foo", Collections.emptyMap()));
+                    return ImmutableList.of(new SaiIndex("upper_idx", "Foo", true, Collections.emptyMap()),
+                                            new SaiIndex("lower_idx", "foo", false, Collections.emptyMap()));
                 }
             };
 

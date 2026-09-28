@@ -69,21 +69,32 @@ public class CqlUtilsTest extends VersionRunner
     @Test
     public void testExtractSaiIndexes()
     {
-        String schema = "CREATE TABLE ks.tbl (pk bigint PRIMARY KEY, score int, name text, attrs map<text, text>); "
+        String schema = "CREATE TABLE ks.tbl (pk bigint PRIMARY KEY, score int, \"Status\" int, name text, attrs map<text, text>); "
                       + "CREATE INDEX score_idx ON ks.tbl (score) USING 'sai'; "
+                      + "CREATE INDEX status_idx ON ks.tbl (\"Status\") USING 'sai'; "
                       + "CREATE CUSTOM INDEX name_idx ON ks.tbl (name) USING 'org.apache.cassandra.index.sai.StorageAttachedIndex' "
                       + "WITH OPTIONS = {'case_sensitive': 'false'}; "
                       + "CREATE CUSTOM INDEX attrs_idx ON ks.tbl (keys(attrs)) USING 'StorageAttachedIndex'; "
                       + "CREATE CUSTOM INDEX legacy_idx ON ks.tbl (name) USING 'org.apache.cassandra.index.sasi.SASIIndex';";
 
         List<SaiIndex> indexes = CqlUtils.extractSaiIndexes(schema, "ks", "tbl");
-        assertThat(indexes).hasSize(2);
+        assertThat(indexes).hasSize(3);
+
         assertThat(indexes.get(0).name()).isEqualTo("score_idx");
         assertThat(indexes.get(0).column()).isEqualTo("score");
         assertThat(indexes.get(0).options()).isEmpty();
-        assertThat(indexes.get(1).name()).isEqualTo("name_idx");
-        assertThat(indexes.get(1).column()).isEqualTo("name");
-        assertThat(indexes.get(1).options()).containsEntry("case_sensitive", "false");
+        assertThat(indexes.get(0).columnQuoted()).isFalse();
+        assertThat(indexes.get(0).target()).isEqualTo("score");
+
+        assertThat(indexes.get(1).name()).isEqualTo("status_idx");
+        assertThat(indexes.get(1).column()).isEqualTo("Status");
+        assertThat(indexes.get(1).options()).isEmpty();
+        assertThat(indexes.get(1).columnQuoted()).isTrue();
+        assertThat(indexes.get(1).target()).isEqualTo("\"Status\"");
+
+        assertThat(indexes.get(2).name()).isEqualTo("name_idx");
+        assertThat(indexes.get(2).column()).isEqualTo("name");
+        assertThat(indexes.get(2).options()).containsEntry("case_sensitive", "false");
     }
 
     @ParameterizedTest

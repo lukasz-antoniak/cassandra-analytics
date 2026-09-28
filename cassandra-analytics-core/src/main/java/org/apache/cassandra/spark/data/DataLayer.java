@@ -450,7 +450,6 @@ public abstract class DataLayer implements Serializable
      * {@code Foo} and {@code foo} are indexed, an attribute such as {@code FOO} is deliberately not used for SAI
      * pruning because choosing either index could create false negatives.
      */
-    // TODO(lantoniak): Check.
     @Nullable
     private SaiIndex saiIndexForAttribute(@NotNull String attribute)
     {
@@ -470,8 +469,10 @@ public abstract class DataLayer implements Serializable
             {
                 continue;
             }
-            if (caseInsensitiveMatch != null && !caseInsensitiveMatch.column().equals(candidate.column()))
+            if (caseInsensitiveMatch != null)
             {
+                // found two candidates that did not satisfy exact match, but satisfied case-insensitive match
+                // unclear which one to use
                 return null;
             }
             caseInsensitiveMatch = candidate;

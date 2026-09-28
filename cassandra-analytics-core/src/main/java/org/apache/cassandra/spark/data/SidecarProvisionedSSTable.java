@@ -172,7 +172,7 @@ public class SidecarProvisionedSSTable extends SSTable
                                                                        FileType.INDEX,
                                                                        position + requested);
         try (BufferingInputStream<SidecarProvisionedSSTable> input =
-                 new BufferingInputStream<>(source, stats.bufferingInputStreamStats(), position))
+             new BufferingInputStream<>(source, stats.bufferingInputStreamStats(), position))
         {
             return input.read(destination);
         }

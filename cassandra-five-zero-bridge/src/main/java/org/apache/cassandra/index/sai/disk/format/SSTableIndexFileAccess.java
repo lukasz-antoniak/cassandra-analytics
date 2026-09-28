@@ -163,7 +163,7 @@ public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
                     {
                         return -1;
                     }
-                    throw new EOFException("Short read for " + componentName + " at " + absolutePosition
+                    throw new EOFException("Failed read for " + componentName + " at " + absolutePosition
                                            + ": expected " + requested + " bytes, got " + read);
                 }
                 return read;

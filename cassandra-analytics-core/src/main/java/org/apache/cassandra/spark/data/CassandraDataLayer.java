@@ -690,7 +690,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
                             + "instance={} port={} keyspace={} tableName={} snapshotName={} cacheKey={}",
                             partitionId, range.lowerEndpoint(), range.upperEndpoint(),
                             sidecarInstance.hostname(), sidecarInstance.port(), maybeQuotedKeyspace, maybeQuotedTable, snapshotName, key);
-                boolean includeSecondaryIndexFiles = !saiIndexes.isEmpty();
+                boolean includeSecondaryIndexFiles = saiFilteringEnabled && !saiIndexes.isEmpty();
                 return sidecar.listSnapshotFiles(sidecarInstance, maybeQuotedKeyspace, maybeQuotedTable, snapshotName, includeSecondaryIndexFiles)
                               .thenApply(response -> collectSSTableList(sidecarInstance, response, partitionId));
             }).thenApply(Collection::stream);
@@ -724,7 +724,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         for (ListSnapshotFilesResponse.FileInfo file : snapshotFilesInfo)
         {
             String fileName = file.fileName;
-            // Traditional secondary indexes are snapshot under index subdirectories. We request secondary-index
+            // Traditional secondary indexes (2i) are snapshot under index subdirectories. We request secondary-index
             // files so Sidecar exposes SAI components, but only base-table components belong in this SSTable set.
             if (fileName.indexOf('/') >= 0 || fileName.indexOf('\\') >= 0)
             {
@@ -747,8 +747,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
             catch (IllegalArgumentException ignore)
             {
                 // SAI components are dynamically named and cannot be represented by FileType.
-                String componentName = fileName.substring(lastIndexOfDash + 1);
-                if (componentName.startsWith("SAI+"))
+                if (SSTable.isCustomComponentSupported(fileName))
                 {
                     customComponents.computeIfAbsent(ssTableName, k -> new LinkedHashMap<>())
                                     .put(fileName, file);

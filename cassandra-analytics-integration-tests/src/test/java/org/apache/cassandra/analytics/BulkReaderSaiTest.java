@@ -19,6 +19,7 @@
 package org.apache.cassandra.analytics;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,6 +42,7 @@ import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.ICoordinator;
 import org.apache.cassandra.sidecar.testing.QualifiedName;
 import org.apache.cassandra.spark.data.CassandraDataLayer;
+import org.apache.cassandra.testing.ClusterBuilderConfiguration;
 import org.apache.cassandra.testing.TestUtils;
 import org.apache.spark.sql.Row;
 
@@ -49,10 +51,12 @@ import static org.apache.cassandra.testing.TestUtils.TEST_KEYSPACE;
 import static org.apache.cassandra.testing.TestUtils.uniqueTestTableFullName;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assumptions.assumeThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
 {
     private static final QualifiedName TABLE = uniqueTestTableFullName(TEST_KEYSPACE);
+    private static final QualifiedName QUOTED_TABLE = new QualifiedName(TEST_KEYSPACE, "TestQuotedTable", false, true);
 
     private static final int MATCHING_SCORE = 777;
 
@@ -73,6 +77,7 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
     @Override
     protected void beforeClusterProvisioning()
     {
+        System.setProperty("cassandra.analytics.bridges.sstable_format", sstableFormat());
         assumeThat(TestUtils.getDTestClusterVersion()
                             .isGreaterThanOrEqualTo(
                             new Semver("5.0", Semver.SemverType.LOOSE)))
@@ -105,23 +110,47 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         strategy.reset(CassandraDataLayer.class);
     }
 
+    /**
+     * @return the SSTable format the analytics bulk writer should produce ({@code big} by default;
+     * overridden to {@code bti} by the BTI variant).
+     */
+    protected String sstableFormat()
+    {
+        return "big";
+    }
+
+    @Override
+    protected ClusterBuilderConfiguration testClusterConfiguration()
+    {
+        ClusterBuilderConfiguration conf = super.testClusterConfiguration();
+        // Preserve the base instance config (e.g. storage_compatibility_mode) and pin the node SSTable format.
+        Map<String, Object> instanceConfig = new HashMap<>();
+        if (conf.additionalInstanceConfig != null)
+        {
+            instanceConfig.putAll(conf.additionalInstanceConfig);
+        }
+        instanceConfig.put("sstable.selected_format", sstableFormat());
+        return conf.additionalInstanceConfig(instanceConfig);
+    }
+
     static Stream<Arguments> queryInputs()
     {
         return Stream.of(
-        Arguments.of("eq", "score = " + MATCHING_SCORE, 2, 0.08),
-        Arguments.of("gt", "score > 250", 8, 0.2),
-        Arguments.of("between", "score > 250 AND score < 300", 5, 0.1),
-        Arguments.of("or", "score <= 2 OR score > 300", 3 + 3, 1), // OR expressions do not use SAI index
-        Arguments.of("multi_column", "score = 778 AND state = 'changed'", 1, 0.05),
-        Arguments.of("overridden", "score = 777 AND state = 'change-score'", 0, 0.05) // not most recent value
+        Arguments.of("eq", TABLE, "score = " + MATCHING_SCORE, 2, 0.08),
+        Arguments.of("gt", TABLE, "score > 250", 8, 0.2),
+        Arguments.of("between", TABLE, "score > 250 AND score < 300", 5, 0.1),
+        Arguments.of("or", TABLE, "score <= 2 OR score > 300", 3 + 3, 1), // OR expressions do not use SAI index
+        Arguments.of("multi_column", TABLE, "score = 778 AND state = 'changed'", 1, 0.05),
+        Arguments.of("overridden", TABLE, "score = 777 AND state = 'change-score'", 0, 0.05), // not most recent value
+        Arguments.of("quoted", QUOTED_TABLE, "Score > 250", 9, 0.2)
         );
     }
 
     @ParameterizedTest
     @MethodSource("queryInputs")
-    void testIndexUsage(String view, String whereClause, int expectedRows, double maxDataFileReadPercentage)
+    void testIndexUsage(String view, QualifiedName table, String whereClause, int expectedRows, double maxDataFileReadPercentage)
     {
-        calculateFullScanBaseline();
+        calculateFullScanBaseline(table);
 
         // Alternative pushdown filter with Spark SQL context:
         // Dataset<Row> input = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "true")).load();
@@ -131,10 +160,9 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         //                                                   + " WHERE " + whereClause)
         //                                              .collectAsList();
 
-        List<Row> matches = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "true"))
+        List<Row> matches = bulkReaderDataFrame(table, Map.of("saiFilteringEnabled", "true"))
                             .load()
                             .filter(whereClause)
-                            .select("id", "score", "state", "payload")
                             .collectAsList();
         assertThat(matches).hasSize(expectedRows);
 
@@ -154,23 +182,34 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
     protected void initializeSchemaForTest()
     {
         createTestKeyspace(TEST_KEYSPACE, DC1_RF1);
+        String tableStmt = "CREATE TABLE IF NOT EXISTS %s ("
+                           + "id int PRIMARY KEY, "
+                           + "score int, "
+                           + "state text, "
+                           + "payload text"
+                           + ") WITH compression = {'enabled': 'false'} "
+                           + "AND compaction = {"
+                           + "'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
+                           + "'enabled': 'false'"
+                           + "};";
 
-        createTestTable(TABLE,
-                        "CREATE TABLE IF NOT EXISTS %s ("
-                        + "id int PRIMARY KEY, "
-                        + "score int, "
-                        + "state text, "
-                        + "payload text"
-                        + ") WITH compression = {'enabled': 'false'} "
-                        + "AND compaction = {"
-                        + "'class': 'org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy', "
-                        + "'enabled': 'false'"
-                        + "};");
+        createTestTable(TABLE, tableStmt);
+
+        createTestTable(QUOTED_TABLE, tableStmt
+                                      .replace("score", "\"Score\"")
+                                      .replace("state", "\"State\""));
 
         ICoordinator coordinator = cluster.get(1).coordinator();
 
+        // standard
         coordinator.execute(String.format("CREATE INDEX IF NOT EXISTS score_sai ON %s (score) USING 'sai';", TABLE), ConsistencyLevel.ALL);
         coordinator.execute(String.format("CREATE INDEX IF NOT EXISTS state_sai ON %s (state) USING 'sai';", TABLE), ConsistencyLevel.ALL);
+
+        // quoted
+        coordinator.execute(String.format("CREATE INDEX IF NOT EXISTS \"Score_quoted_sai\" ON %s (\"Score\") USING 'sai';",
+                                          QUOTED_TABLE), ConsistencyLevel.ALL);
+        coordinator.execute(String.format("CREATE INDEX IF NOT EXISTS \"State_quoted_sai\" ON %s (\"State\") USING 'sai';",
+                                          QUOTED_TABLE), ConsistencyLevel.ALL);
 
         // Lots of data which does not match score=777. The relatively
         // large payload gives us a robust full-scan I/O baseline.
@@ -216,6 +255,9 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         coordinator.execute(String.format("INSERT INTO %s (id, score, state, payload) VALUES (%d, %d, '%s', '%s')",
                                           TABLE, id, score, state, PAYLOAD),
                             ConsistencyLevel.ALL);
+        coordinator.execute(String.format("INSERT INTO %s (id, \"Score\", \"State\", payload) VALUES (%d, %d, '%s', '%s')",
+                                          QUOTED_TABLE, id, score, state, PAYLOAD),
+                            ConsistencyLevel.ALL);
     }
 
     private void flushTable()
@@ -232,11 +274,11 @@ public class BulkReaderSaiTest extends SharedClusterSparkIntegrationTestBase
         return new String(chars);
     }
 
-    private void calculateFullScanBaseline()
+    private void calculateFullScanBaseline(QualifiedName table)
     {
         if (fullScanBytes < 0)
         {
-            List<Row> allRows = bulkReaderDataFrame(TABLE, Map.of("saiFilteringEnabled", "false"))
+            List<Row> allRows = bulkReaderDataFrame(table, Map.of("saiFilteringEnabled", "false"))
                                 .load()
                                 .select("id", "score", "state", "payload")
                                 .collectAsList();

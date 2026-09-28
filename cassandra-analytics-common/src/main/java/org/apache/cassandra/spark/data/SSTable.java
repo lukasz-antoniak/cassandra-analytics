@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableSet;
 
 import org.apache.cassandra.spark.utils.Preconditions;
 import org.apache.cassandra.spark.utils.streaming.CassandraFile;
@@ -42,6 +43,8 @@ import org.jetbrains.annotations.Nullable;
 public abstract class SSTable implements Serializable, CassandraFile
 {
     public static final long serialVersionUID = 42L;
+
+    protected static final Set<String> customComponentPrefixes = ImmutableSet.of("SAI+");
 
     private static final String FILENAME_SEPARATOR = "-";
     private static final Splitter filenameSplitter = Splitter.on(FILENAME_SEPARATOR);
@@ -102,8 +105,8 @@ public abstract class SSTable implements Serializable, CassandraFile
     /**
      * Returns non-standard SSTable component file names exposed by this SSTable.
      *
-     * SAI uses dynamically named custom components (for example, files beginning
-     * with {@code SAI+}) which cannot be represented by {@link FileType}.
+     * SAI uses dynamically named custom components (files beginning with {@code SAI+})
+     * which cannot be represented by {@link FileType} enumeration.
      */
     @NotNull
     public Set<String> customComponentNames()
@@ -226,5 +229,19 @@ public abstract class SSTable implements Serializable, CassandraFile
     {
         List<String> tokens = filenameSplitter.splitToList(getDataFileName());
         return tokens.get(tokens.size() - 4);
+    }
+
+    public static boolean isCustomComponentSupported(String fileName)
+    {
+        int separator = fileName.lastIndexOf('-');
+        String componentName = separator > 0 ? fileName.substring(separator + 1) : fileName;
+        for (String type : customComponentPrefixes)
+        {
+            if (componentName.startsWith(type))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }

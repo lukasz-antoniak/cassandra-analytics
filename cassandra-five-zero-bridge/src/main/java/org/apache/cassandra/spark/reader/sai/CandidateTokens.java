@@ -238,7 +238,6 @@ public final class CandidateTokens
             }
         }
 
-
         public int size()
         {
             return size;

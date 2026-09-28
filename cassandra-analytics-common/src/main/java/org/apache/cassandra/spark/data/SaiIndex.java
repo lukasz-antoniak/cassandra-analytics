@@ -41,19 +41,18 @@ public final class SaiIndex implements Serializable
     private final String name;
     @NotNull
     private final String column;
-    @NotNull
-    private final String target;
+    private final boolean columnQuoted;
     @NotNull
     private final Map<String, String> options;
 
     public SaiIndex(@NotNull String name,
                     @NotNull String column,
-                    @NotNull String target,
+                    boolean columnQuoted,
                     @NotNull Map<String, String> options)
     {
         this.name = name;
         this.column = column;
-        this.target = target;
+        this.columnQuoted = columnQuoted;
         this.options = Collections.unmodifiableMap(new LinkedHashMap<>(options));
     }
 
@@ -69,10 +68,17 @@ public final class SaiIndex implements Serializable
         return column;
     }
 
+    public boolean columnQuoted()
+    {
+        return columnQuoted;
+    }
+
     @NotNull
     public String target()
     {
-        return target;
+        return columnQuoted
+               ? "\"" + column.replace("\"", "\"\"") + "\""
+               : column;
     }
 
     @NotNull
@@ -95,19 +101,19 @@ public final class SaiIndex implements Serializable
         SaiIndex that = (SaiIndex) other;
         return Objects.equals(name, that.name)
                && Objects.equals(column, that.column)
-               && Objects.equals(target, that.target)
+               && Objects.equals(columnQuoted, that.columnQuoted)
                && Objects.equals(options, that.options);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(name, column, target, options);
+        return Objects.hash(name, column, columnQuoted, options);
     }
 
     @Override
     public String toString()
     {
-        return "SaiIndex{name=" + name + ", column=" + column + ", target=" + target + ", options=" + options + "}";
+        return "SaiIndex{name=" + name + ", column=" + column + ", columnQuoted=" + columnQuoted + ", options=" + options + "}";
     }
 }

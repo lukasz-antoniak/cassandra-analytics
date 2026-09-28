@@ -304,13 +304,14 @@ public final class CqlUtils
 
             String target = matcher.group(2).trim();
             String column = scalarIndexColumn(target);
+            boolean columnQuoted = isQuoteIdentifier(target);
             if (column == null)
             {
                 continue;
             }
 
             Map<String, String> options = parseIndexOptions(matcher.group(4));
-            indexes.add(new SaiIndex(unquoteIdentifier(matcher.group(1)), column, target, options));
+            indexes.add(new SaiIndex(unquoteIdentifier(matcher.group(1)), column, columnQuoted, options));
         }
         return indexes;
     }
@@ -336,11 +337,18 @@ public final class CqlUtils
     private static String unquoteIdentifier(String identifier)
     {
         String trimmed = identifier.trim();
-        if (trimmed.length() >= 2 && trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"')
+        if (isQuoteIdentifier(trimmed))
         {
-            return trimmed.substring(1, trimmed.length() - 1).replace("\"\"", "\"");
+            return trimmed.substring(1, trimmed.length() - 1)
+                          .replace("\"\"", "\"");
         }
         return trimmed;
+    }
+
+    private static boolean isQuoteIdentifier(String identifier)
+    {
+        String trimmed = identifier.trim();
+        return trimmed.length() >= 2 && trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"';
     }
 
     private static Map<String, String> parseIndexOptions(@Nullable String options)
