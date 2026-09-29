@@ -453,31 +453,54 @@ public abstract class DataLayer implements Serializable
     @Nullable
     private SaiIndex saiIndexForAttribute(@NotNull String attribute)
     {
-        List<SaiIndex> indexes = saiIndexes();
-        for (SaiIndex candidate : indexes)
+        CqlField field = resolveField(attribute);
+        if (field == null)
         {
-            if (candidate.column().equals(attribute))
+            return null;
+        }
+
+        SaiIndex match = null;
+        for (SaiIndex index : saiIndexes())
+        {
+            if (index.column().equals(field.name()))
             {
-                return candidate;
+                if (match != null)
+                {
+                    return null;
+                }
+                match = index;
+            }
+        }
+        return match;
+    }
+
+    @Nullable
+    private CqlField resolveField(@NotNull String attribute)
+    {
+        // exact match always wins
+        for (CqlField field : cqlTable().fields())
+        {
+            if (field.name().equals(attribute))
+            {
+                return field;
             }
         }
 
-        SaiIndex caseInsensitiveMatch = null;
-        for (SaiIndex candidate : indexes)
+        // otherwise case-insensitive resolution is safe only if
+        // there is exactly one matching table column
+        CqlField match = null;
+        for (CqlField field : cqlTable().fields())
         {
-            if (!candidate.column().equalsIgnoreCase(attribute))
+            if (field.name().equalsIgnoreCase(attribute))
             {
-                continue;
+                if (match != null)
+                {
+                    return null;
+                }
+                match = field;
             }
-            if (caseInsensitiveMatch != null)
-            {
-                // found two candidates that did not satisfy exact match, but satisfied case-insensitive match
-                // unclear which one to use
-                return null;
-            }
-            caseInsensitiveMatch = candidate;
         }
-        return caseInsensitiveMatch;
+        return match;
     }
 
     @Nullable

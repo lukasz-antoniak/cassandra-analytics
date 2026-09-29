@@ -32,6 +32,7 @@ import java.util.List;
 import org.apache.cassandra.bridge.TokenRange;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.io.sstable.indexsummary.IndexSummary;
+import org.apache.cassandra.spark.data.FileType;
 import org.apache.cassandra.spark.data.SSTable;
 import org.apache.cassandra.spark.reader.sai.CandidateTokens;
 import org.apache.cassandra.analytics.stats.Stats;
@@ -78,7 +79,8 @@ final class IndexDbUtils
             DataInputStream in = new DataInputStream(is);
             ByteBufferUtils.skipFully(in, searchStartOffset);
 
-            DataDbRange.Accumulator result = new DataDbRange.Accumulator(DataDbRange.DEFAULT_MAX_COALESCE_GAP_BYTES);
+            long maxGapBytes = ssTable.customComponentChunkBufferSize(FileType.INDEX.getFileSuffix()) / 2;
+            DataDbRange.Accumulator result = new DataDbRange.Accumulator(maxGapBytes);
             int candidateIndex = 0;
             Long matchedDataPosition = null;
 

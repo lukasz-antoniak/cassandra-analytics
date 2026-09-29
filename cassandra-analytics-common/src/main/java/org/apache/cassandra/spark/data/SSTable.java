@@ -36,6 +36,8 @@ import org.apache.cassandra.spark.utils.streaming.CassandraFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import static org.apache.cassandra.spark.utils.Properties.DEFAULT_CHUNK_BUFFER_OVERRIDE;
+
 /**
  * Abstract class representing a single SSTable.
  * Implementations must override hashCode and equals methods.
@@ -205,6 +207,11 @@ public abstract class SSTable implements Serializable, CassandraFile
         {
             throw new IncompleteSSTableException(FileType.PARTITIONS_INDEX, FileType.ROWS_INDEX);
         }
+    }
+
+    public long customComponentChunkBufferSize(String componentName)
+    {
+        return DEFAULT_CHUNK_BUFFER_OVERRIDE.get(FileType.INDEX);
     }
 
     public abstract String getDataFileName();

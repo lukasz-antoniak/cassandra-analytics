@@ -184,7 +184,8 @@ public class BtiReaderUtils
             return Collections.emptyList();
         }
 
-        DataDbRange.Accumulator result = new DataDbRange.Accumulator(DataDbRange.DEFAULT_MAX_COALESCE_GAP_BYTES);
+        long maxGapBytes = ssTable.customComponentChunkBufferSize(FileType.INDEX.getFileSuffix()) / 2;
+        DataDbRange.Accumulator result = new DataDbRange.Accumulator(maxGapBytes);
         withPartitionIndex(ssTable, descriptor, metadata, (dataFileHandle, partitionFileHandle, rowFileHandle, partitionIndex) -> {
             TableMetadataRef metadataRef = TableMetadataRef.forOfflineTools(metadata);
             BtiTableReader btiTableReader = new BtiTableReader.Builder(descriptor)

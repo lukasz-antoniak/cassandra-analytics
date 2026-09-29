@@ -28,12 +28,6 @@ import org.jetbrains.annotations.NotNull;
 /** An uncompressed Data.db byte range in the form {@code [start, end)}. */
 public final class DataDbRange
 {
-    /**
-     * Coalesce token ranges with limited gap between them to ease memory pressure.
-     * Exact candidate-token filtering still happens while Data.db is scanned, so this only affects I/O volume.
-     */
-    public static final int DEFAULT_MAX_COALESCE_GAP_BYTES = 64 * 1024;
-
     private final long start;
     private final long end;
 
@@ -66,7 +60,7 @@ public final class DataDbRange
      */
     public static final class Accumulator
     {
-        private final long maxGapBytes;
+        private final long maxGapBytes; // Coalesce token ranges with limited gap between them to ease memory pressure.
         private final List<DataDbRange> ranges = new ArrayList<>();
         private long currentStart = -1L;
         private long currentEnd = -1L;

@@ -662,10 +662,10 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         return hint != null ? hint : PartitionedDataLayer.AvailabilityHint.UNKNOWN;
     }
 
-    private String snapshotKey(SidecarInstance instance)
+    private String snapshotKey(SidecarInstance instance, boolean includeSecondaryIndexes)
     {
-        return String.format("%s/%s/%d/%s/%s/%s",
-                             datacenter, instance.hostname(), instance.port(), keyspace, table, snapshotName);
+        return String.format("%s/%s/%d/%s/%s/%s/%s",
+                             datacenter, instance.hostname(), instance.port(), keyspace, table, snapshotName, includeSecondaryIndexes);
     }
 
     @Override
@@ -678,11 +678,14 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
         {
             throw new IllegalStateException("Could not find matching cassandra instance: " + instance.nodeName());
         }
-        String key = snapshotKey(sidecarInstance);  // NOTE: We don't currently support token filtering in list snapshot
+        boolean includeSecondaryIndexes = saiFilteringEnabled && !saiIndexes.isEmpty();
+        // NOTE: We don't currently support token filtering in list snapshot
+        String key = snapshotKey(sidecarInstance, includeSecondaryIndexes);
         LOGGER.info("Listing snapshot partition={} lowerBound={} upperBound={} "
-                    + "instance={} port={} keyspace={} tableName={} snapshotName={}",
+                    + "instance={} port={} keyspace={} tableName={} snapshotName={} includeSecondaryIndexes={}",
                     partitionId, range.lowerEndpoint(), range.upperEndpoint(),
-                    sidecarInstance.hostname(), sidecarInstance.port(), maybeQuotedKeyspace, maybeQuotedTable, snapshotName);
+                    sidecarInstance.hostname(), sidecarInstance.port(), maybeQuotedKeyspace, maybeQuotedTable,
+                    snapshotName, includeSecondaryIndexes);
         try
         {
             return SNAPSHOT_CACHE.get(key, () -> {
@@ -690,8 +693,7 @@ public class CassandraDataLayer extends PartitionedDataLayer implements StartupV
                             + "instance={} port={} keyspace={} tableName={} snapshotName={} cacheKey={}",
                             partitionId, range.lowerEndpoint(), range.upperEndpoint(),
                             sidecarInstance.hostname(), sidecarInstance.port(), maybeQuotedKeyspace, maybeQuotedTable, snapshotName, key);
-                boolean includeSecondaryIndexFiles = saiFilteringEnabled && !saiIndexes.isEmpty();
-                return sidecar.listSnapshotFiles(sidecarInstance, maybeQuotedKeyspace, maybeQuotedTable, snapshotName, includeSecondaryIndexFiles)
+                return sidecar.listSnapshotFiles(sidecarInstance, maybeQuotedKeyspace, maybeQuotedTable, snapshotName, includeSecondaryIndexes)
                               .thenApply(response -> collectSSTableList(sidecarInstance, response, partitionId));
             }).thenApply(Collection::stream);
         }

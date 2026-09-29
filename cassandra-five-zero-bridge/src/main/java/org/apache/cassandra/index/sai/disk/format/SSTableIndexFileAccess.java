@@ -31,6 +31,7 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Set;
 
 import com.google.common.base.Preconditions;
+import com.google.common.primitives.Ints;
 
 import org.apache.cassandra.io.util.ChannelProxy;
 import org.apache.cassandra.io.util.File;
@@ -43,10 +44,6 @@ import org.apache.cassandra.spark.data.SSTable;
  */
 public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
 {
-    // Avoid Cassandra's 4 KiB default, which would turn random SAI traversal into
-    // one Sidecar request per 4 KiB. This is deliberately a small/tunable first cut.
-    private static final int REMOTE_READ_BUFFER_SIZE = 512 * 1024;
-
     private final SSTable sstable;
     private final Set<String> components;
 
@@ -80,7 +77,7 @@ public final class SSTableIndexFileAccess implements IndexDescriptor.FileAccess
         long length = sstable.customComponentLength(componentName);
         return new FileHandle.Builder(file)
                .withLengthOverride(length)
-               .bufferSize(REMOTE_READ_BUFFER_SIZE)
+               .bufferSize(Ints.checkedCast(sstable.customComponentChunkBufferSize(componentName)))
                .complete(ignored -> new ChannelProxy(file,
                                                      new SSTableFileChannel(sstable,
                                                                             componentName,

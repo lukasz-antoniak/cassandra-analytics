@@ -279,6 +279,12 @@ public class SidecarProvisionedSSTable extends SSTable
     }
 
     @Override
+    public long customComponentChunkBufferSize(String componentName)
+    {
+        return sidecarClientConfig.chunkBufferSize(FileType.INDEX);
+    }
+
+    @Override
     public String toString()
     {
         return "SidecarProvisionedSSTable{" +
