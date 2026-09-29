@@ -74,7 +74,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokensConsumesAllMatchesAndDeduplicatesPartitionTokens()
+    void testCollectCandidatesConsumesAllMatchesAndDeduplicatesTokens()
     {
         List<Candidate> candidates = sortedCandidates("alpha", "bravo", "charlie");
 
@@ -102,7 +102,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokensFallsBackWhenUniqueCandidateLimitIsExceeded()
+    void testCollectCandidatesFallsBackWhenUniqueCandidateLimitExceeded()
     {
         List<Candidate> candidates = sortedCandidates("one", "two", "three");
 
@@ -115,7 +115,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokensDoesNotCountDuplicatePartitionTokensAgainstLimit()
+    void testCollectCandidatesDoesNotCountDuplicatePartitionTokensAgainstLimit()
     {
         List<Candidate> candidates = sortedCandidates("one", "two");
         List<PrimaryKey> matches = Arrays.asList(primaryKey(candidates.get(0).partitionKey),
@@ -134,7 +134,7 @@ class SaiIndexReaderTests
 
 
     @Test
-    void testCollectCandidateTokensStopsAfterSparkTokenRange()
+    void testCollectCandidatesStopsAfterSparkTokenRange()
     {
         List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five", "six");
         Candidate firstIncluded = candidates.get(1);
@@ -194,7 +194,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokensAppliesSparkTokenRange()
+    void testCollectCandidatesAppliesSparkTokenRange()
     {
         List<Candidate> candidates = sortedCandidates("one", "two", "three", "four", "five");
         Candidate firstIncluded = candidates.get(1);
@@ -204,7 +204,7 @@ class SaiIndexReaderTests
         CandidateTokens result = SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(),
                                                                        sparkRangeFilter, Murmur3Partitioner.instance,
                                                                        Integer.MAX_VALUE)
-                                               .orElse(null);
+                                               .orElseThrow();
 
         assertThat(result.contains(candidates.get(0).token)).isFalse();
         assertThat(result.contains(firstIncluded.token)).isTrue();
@@ -215,7 +215,7 @@ class SaiIndexReaderTests
     }
 
     @Test
-    void testCollectCandidateTokensReturnsEmptyWhenSparkRangeRejectsEveryMatch()
+    void testCollectCandidatesReturnsEmptyWhenSparkRangeRejectsEveryMatch()
     {
         List<Candidate> candidates = sortedCandidates("red", "green", "blue");
         BigInteger upper = candidates.get(0).token.subtract(BigInteger.ONE);
@@ -223,7 +223,7 @@ class SaiIndexReaderTests
 
         CandidateTokens result = SaiIndexReader.collectCandidateTokens(primaryKeys(candidates).iterator(), sparkRangeFilter,
                                                                        Murmur3Partitioner.instance, Integer.MAX_VALUE)
-                                               .orElse(null);
+                                               .orElseThrow();
 
         assertThat(result.isEmpty()).isTrue();
     }

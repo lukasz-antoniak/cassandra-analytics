@@ -25,7 +25,9 @@ import java.util.List;
 import org.apache.cassandra.spark.utils.Preconditions;
 import org.jetbrains.annotations.NotNull;
 
-/** An uncompressed Data.db byte range in the form {@code [start, end)}. */
+/**
+ * An uncompressed {@code Data.db} byte range in the form {@code [start, end)}.
+ */
 public final class DataDbRange
 {
     private final long start;

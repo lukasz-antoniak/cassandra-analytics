@@ -202,7 +202,7 @@ public class IndexDbTests
     }
 
     @Test
-    public void testFindDataDbRangesMergeWalksExactCandidates() throws IOException
+    public void testFindDataDbRangesConsultsCandidateTokens() throws IOException
     {
         IPartitioner partitioner = BRIDGE.getPartitioner(Partitioner.Murmur3Partitioner);
         IndexRow[] rows = IntStream.rangeClosed(1, 4)

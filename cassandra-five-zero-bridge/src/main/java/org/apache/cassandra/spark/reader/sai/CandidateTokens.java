@@ -93,7 +93,9 @@ public final class CandidateTokens
         return Arrays.binarySearch(genericTokens, token) >= 0;
     }
 
-    /** Returns the exact candidates in the inclusive token interval {@code [first, last]}. */
+    /**
+     * Returns the exact candidates in the inclusive token interval {@code [first, last]}.
+     */
     @NotNull
     public Slice slice(@NotNull BigInteger first, @NotNull BigInteger last)
     {
@@ -166,7 +168,9 @@ public final class CandidateTokens
         return murmur3 ? BigInteger.valueOf(murmur3Tokens[index]) : genericTokens[index];
     }
 
-    /** Lightweight view over a contiguous portion of the sorted candidate set. */
+    /**
+     * View over a contiguous portion of the sorted candidate set.
+     */
     public static final class Slice
     {
         private final CandidateTokens owner;
@@ -207,7 +211,9 @@ public final class CandidateTokens
             return owner.tokenAt(from + index);
         }
 
-        /** Compares the candidate at {@code index} with the supplied token. */
+        /**
+         * Compares the candidate at {@code index} with the supplied token.
+         */
         public int compareAt(int index, @NotNull BigInteger token)
         {
             if (index < 0 || index >= size())

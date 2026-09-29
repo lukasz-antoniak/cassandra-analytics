@@ -100,7 +100,7 @@ public final class SaiIndexReader
     /**
      * Executes all SAI predicates once and returns the sorted candidate tokens as an exact compact token set.
      *
-     * @return empty Optional when SAI cannot safely be used and the caller should fall back to the ordinary SSTable
+     * @return empty {@link Optional} when SAI cannot safely be used and the caller should fall back to the ordinary SSTable
      *         scan; an empty {@link CandidateTokens} means SAI executed successfully and found no candidates
      */
     @NotNull
@@ -193,8 +193,7 @@ public final class SaiIndexReader
                 {
                     LOGGER.info("SAI matched more than {} unique candidate partition tokens; " +
                                 "falling back to normal SSTable scan. Configure 'saiMaxCandidateTokens' " +
-                                "option to change the limit",
-                                maxCandidateTokens);
+                                "option to change the limit", maxCandidateTokens);
                     return Optional.empty();
                 }
             }
@@ -253,8 +252,8 @@ public final class SaiIndexReader
     /**
      * Supplies Cassandra's native SAI planner with the Analytics-owned SSTable search implementation.
      *
-     * <p>The stock QueryController builds a QueryView from live Cassandra SSTableReader instances. Analytics has
-     * remote/offline SSTables instead, so index selection and expression planning remain native while this adapter
+     * <p>Native QueryController builds a QueryView from live Cassandra SSTableReader instances. Analytics has
+     * remote / offline SSTables instead, so index selection and expression planning remain native while this adapter
      * replaces only the step that turns planned Expressions into KeyRangeIterators.</p>
      */
     private static final class AnalyticsQueryController extends QueryController
@@ -343,7 +342,9 @@ public final class SaiIndexReader
         return Keyspace.openWithoutSSTables(metadata.keyspace).getColumnFamilyStore(metadata.name);
     }
 
-    /** Holds all open native SAI resources for one SSTable. */
+    /**
+     * Holds all open native SAI resources for one SSTable.
+     */
     private static final class SSTableResources implements Closeable
     {
         private final Descriptor descriptor;
@@ -464,7 +465,7 @@ public final class SaiIndexReader
             {
                 for (OpenSegment segment : column.segments)
                 {
-                    // Segment metadata is ordered by primary key. Avoid opening/searching a segment
+                    // Segment metadata is ordered by primary key. Avoid opening / searching a segment
                     // whose complete token span is outside the token range assigned to this Spark worker.
                     if (!overlapsSparkRange(segment.metadata.minKey, segment.metadata.maxKey, sparkRangeFilter))
                     {
@@ -543,7 +544,9 @@ public final class SaiIndexReader
         }
     }
 
-    /** Owns all per-SSTable resources and closes them exactly once. */
+    /**
+     * Owns all per-SSTable resources and closes them exactly once.
+     */
     private static final class ResourceGroup implements Closeable
     {
         private final List<SSTableResources> resources = new ArrayList<>();

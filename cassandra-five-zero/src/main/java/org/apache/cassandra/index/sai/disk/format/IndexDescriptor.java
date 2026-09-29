@@ -57,6 +57,9 @@ import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.IOUtils;
 
 /**
+ * NOTE: This copy is based on Cassandra 5.0.7 and adds {@link FileAccess} so Cassandra Analytics can
+ * read SAI components through Cassandra Sidecar without materializing them on local disk.
+ * <p>
  * The {@link IndexDescriptor} is an analog of the SSTable {@link Descriptor} and provides version
  * specific information about the on-disk state of a {@link StorageAttachedIndex}.
  * <p>
@@ -67,9 +70,6 @@ import org.apache.lucene.util.IOUtils;
  * <p>
  * Its remaining responsibility is to act as a proxy to the {@link OnDiskFormat} associated with the
  * index {@link Version}.
- *
- * <p>This copy is based on Cassandra 5.0.7 and adds {@link FileAccess} so Cassandra Analytics can
- * read SAI components through Cassandra Sidecar without materializing them on local disk.</p>
  */
 public class IndexDescriptor
 {

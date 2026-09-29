@@ -68,7 +68,7 @@ class CandidateTokensTests
     }
 
     @Test
-    void testGenericPartitionerUsesBigIntegerFallback()
+    void testRandomPartitionerUsesBigIntegerFallback()
     {
         CandidateTokens.Builder builder = CandidateTokens.builder(RandomPartitioner.instance);
         BigInteger large = BigInteger.ONE.shiftLeft(100);

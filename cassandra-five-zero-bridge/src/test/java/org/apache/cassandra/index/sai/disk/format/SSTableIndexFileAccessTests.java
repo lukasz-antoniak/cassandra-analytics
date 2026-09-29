@@ -65,7 +65,7 @@ class SSTableIndexFileAccessTests
     void testPositionalReadPreservesDestinationLimitAndChannelPosition() throws Exception
     {
         byte[] data = bytes(64);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
         {
@@ -87,7 +87,7 @@ class SSTableIndexFileAccessTests
     void testSequentialReadAdvancesPositionAndHandlesEof() throws Exception
     {
         byte[] data = bytes(10);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
         {
@@ -106,7 +106,7 @@ class SSTableIndexFileAccessTests
     void testPositionalReadStopsAtEofAndRejectsNegativePosition() throws Exception
     {
         byte[] data = bytes(10);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
         {
@@ -124,7 +124,7 @@ class SSTableIndexFileAccessTests
     void testScatteringReadHonorsOffsetAndLength() throws Exception
     {
         byte[] data = bytes(32);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
         {
@@ -143,9 +143,9 @@ class SSTableIndexFileAccessTests
     }
 
     @Test
-    void testPositionAndScatteringBounds() throws Exception
+    void testPositionAndViolatingBounds() throws Exception
     {
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, bytes(16));
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, bytes(16));
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
         {
@@ -162,7 +162,7 @@ class SSTableIndexFileAccessTests
     void testShortBackendReadFailsInsteadOfReturningPartialChunk() throws Exception
     {
         byte[] data = bytes(32);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
         sstable.shortReads = true;
 
         try (SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable))
@@ -176,7 +176,7 @@ class SSTableIndexFileAccessTests
     @Test
     void testClosedChannelRejectsReads() throws Exception
     {
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, bytes(16));
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, bytes(16));
         SSTableIndexFileAccess.SSTableFileChannel channel = channel(sstable);
         channel.close();
 
@@ -189,12 +189,12 @@ class SSTableIndexFileAccessTests
     void testFileHandleReadsAcrossRemoteChunksAndSupportsBackwardSeek() throws Exception
     {
         byte[] data = bytes(REMOTE_READ_BUFFER_SIZE * 3 + 137);
-        InMemorySSTable sstable = new InMemorySSTable(COMPONENT, data);
+        TestInMemorySSTable sstable = new TestInMemorySSTable(COMPONENT, data);
         SSTableIndexFileAccess access = new SSTableIndexFileAccess(sstable);
-        File identifierOnly = new File("build/does-not-exist/" + COMPONENT);
-        assertThat(identifierOnly.exists()).isFalse();
+        File file = new File("build/data/" + COMPONENT);
+        assertThat(file.exists()).isFalse();
 
-        try (FileHandle handle = access.open(identifierOnly);
+        try (FileHandle handle = access.open(file);
              RandomAccessReader reader = handle.createReader())
         {
             assertRead(reader, data, REMOTE_READ_BUFFER_SIZE - 11, 64);
@@ -222,7 +222,7 @@ class SSTableIndexFileAccessTests
         assertThat(actual).containsExactly(Arrays.copyOfRange(expected, (int) position, (int) position + length));
     }
 
-    private static SSTableIndexFileAccess.SSTableFileChannel channel(InMemorySSTable sstable)
+    private static SSTableIndexFileAccess.SSTableFileChannel channel(TestInMemorySSTable sstable)
     {
         return new SSTableIndexFileAccess.SSTableFileChannel(sstable, COMPONENT, sstable.data.length);
     }
@@ -249,7 +249,7 @@ class SSTableIndexFileAccessTests
         }
     }
 
-    private static final class InMemorySSTable extends SSTable
+    private static final class TestInMemorySSTable extends SSTable
     {
         private static final long serialVersionUID = 1L;
 
@@ -258,7 +258,7 @@ class SSTableIndexFileAccessTests
         private final List<Read> reads = new ArrayList<>();
         private boolean shortReads;
 
-        private InMemorySSTable(String componentName, byte[] data)
+        private TestInMemorySSTable(String componentName, byte[] data)
         {
             this.componentName = componentName;
             this.data = data;
